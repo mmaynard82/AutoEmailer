@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlmodel
+python-dotenv
+boto3
+openai
+python-multipart
+pandas
+email-validator
+jinja2

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Draft</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+            background: #f6f7f9;
+            color: #222;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            max-width: 900px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        input, textarea, button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 6px;
+            margin-bottom: 16px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            height: 350px;
+            white-space: pre-wrap;
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            background: #1f5eff;
+            color: white;
+            font-weight: bold;
+        }
+
+        a {
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .small {
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<a href="/dashboard">← Back to Dashboard</a>
+
+<div class="card">
+    <h1>Edit Email Draft</h1>
+
+    <p class="small">
+    To: {{ contact.first_name }} {{ contact.last_name or "" }} — {{ contact.email }}<br>
+    Company: {{ contact.company or "" }}<br>
+    Campaign: {{ campaign.name if campaign else "" }}<br>
+    {% if step %}
+        Step {{ step.step_number }} — Day {{ step.send_day }} — {{ step.name }}
+    {% endif %}
+</p>
+
+    <form method="post" action="/dashboard/drafts/{{ draft.id }}/edit">
+        <label>Subject</label>
+        <input type="text" name="subject" value="{{ draft.subject }}" required>
+
+        <label>Body</label>
+        <textarea name="body" required>{{ draft.body }}</textarea>
+
+        <button type="submit">Save Changes</button>
+    </form>
+</div>
+
+</body>
+</html>

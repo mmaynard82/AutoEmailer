@@ -1,0 +1,75 @@
+from typing import Optional
+from datetime import datetime
+from sqlmodel import SQLModel, Field
+
+
+class Contact(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    first_name: str
+    last_name: Optional[str] = None
+    email: str = Field(index=True)
+
+    company: Optional[str] = None
+    industry: Optional[str] = None
+    role: Optional[str] = None
+    website: Optional[str] = None
+
+    unsubscribed: bool = False
+    suppressed: bool = False
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Campaign(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    name: str
+    offer: str
+    audience: str
+    tone: str = "professional, helpful, concise"
+    call_to_action: str = "Would you be open to a brief conversation?"
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class CadenceStep(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    campaign_id: int = Field(index=True)
+
+    step_number: int
+    send_day: int
+    name: str
+    purpose: str
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class EmailDraft(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    contact_id: int = Field(index=True)
+    campaign_id: int = Field(index=True)
+    cadence_step_id: Optional[int] = Field(default=None, index=True)
+
+    step_number: Optional[int] = None
+    send_day: Optional[int] = None
+
+    subject: str
+    body: str
+
+    approved: bool = False
+    sent: bool = False
+    sent_at: Optional[datetime] = None
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Suppression(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    email: str = Field(index=True, unique=True)
+    reason: str
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
