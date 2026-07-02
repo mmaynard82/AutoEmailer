@@ -30,6 +30,20 @@ class Campaign(SQLModel, table=True):
     tone: str = "professional, helpful, concise"
     call_to_action: str = "Would you be open to a brief conversation?"
 
+    template_subject: Optional[str] = "Quick question for {{ company }}"
+    template_body: Optional[str] = """Hi {{ first_name }},
+
+{{ personal_line }}
+
+I’m reaching out because we help {{ audience }} improve CRM follow-up, sales visibility, and client communication.
+
+{{ offer }}
+
+{{ call_to_action }}
+
+Best,
+Evolution CRM"""
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

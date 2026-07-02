@@ -1,0 +1,11 @@
+.venv/
+.env
+emailer.db
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env.*
+.DS_Store
+.vscode/
+.idea/

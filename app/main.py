@@ -1,21 +1,34 @@
+import os
+import hmac
+import hashlib
 from datetime import datetime
 from typing import List
 
 import pandas as pd
+from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Request, Form
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
 from app.database import create_db_and_tables, get_session
 from app.models import Contact, Campaign, CadenceStep, EmailDraft, Suppression
-from app.ai_writer import generate_sales_email
+from app.ai_writer import render_template_email
 from app.ses_sender import send_email_via_ses
+from app.hubspot_client import get_hubspot_contacts, export_contact_to_hubspot
 
+
+load_dotenv()
 
 app = FastAPI(title="AI Emailer MVP")
 
 templates = Jinja2Templates(directory="app/templates")
+
+
+DEMO_MODE = os.getenv("DEMO_MODE", "true").lower() == "true"
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme")
+SECRET_KEY = os.getenv("SECRET_KEY", "local-dev-secret")
+APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/")
 
 
 @app.on_event("startup")
@@ -23,22 +36,197 @@ def on_startup():
     create_db_and_tables()
 
 
+# ------------------------------------------------------------
+# Auth Helpers
+# ------------------------------------------------------------
+
+def make_auth_token() -> str:
+    message = ADMIN_PASSWORD.encode("utf-8")
+    secret = SECRET_KEY.encode("utf-8")
+    return hmac.new(secret, message, hashlib.sha256).hexdigest()
+
+
+def is_logged_in(request: Request) -> bool:
+    token = request.cookies.get("ai_emailer_auth")
+    expected_token = make_auth_token()
+
+    if not token:
+        return False
+
+    return hmac.compare_digest(token, expected_token)
+
+
+def require_dashboard_login(request: Request):
+    if not is_logged_in(request):
+        raise HTTPException(status_code=303, headers={"Location": "/login"})
+
+
+# ------------------------------------------------------------
+# Unsubscribe Helpers
+# ------------------------------------------------------------
+
+def make_unsubscribe_token(contact_id: int, email: str) -> str:
+    message = f"{contact_id}:{email.lower()}".encode("utf-8")
+    secret = SECRET_KEY.encode("utf-8")
+    return hmac.new(secret, message, hashlib.sha256).hexdigest()
+
+
+def verify_unsubscribe_token(contact_id: int, email: str, token: str) -> bool:
+    expected_token = make_unsubscribe_token(contact_id, email)
+    return hmac.compare_digest(expected_token, token)
+
+
+def build_unsubscribe_url(contact: Contact) -> str:
+    token = make_unsubscribe_token(contact.id, contact.email)
+    return f"{APP_BASE_URL}/unsubscribe/{contact.id}/{token}"
+
+
+# ------------------------------------------------------------
+# Login / Logout
+# ------------------------------------------------------------
+
+@app.get("/login")
+def login_page(request: Request):
+    if is_logged_in(request):
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={"error": ""},
+    )
+
+
+@app.post("/login")
+def login_submit(
+    request: Request,
+    password: str = Form(...),
+):
+    if password != ADMIN_PASSWORD:
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"error": "Incorrect password."},
+        )
+
+    response = RedirectResponse(url="/dashboard", status_code=303)
+    response.set_cookie(
+        key="ai_emailer_auth",
+        value=make_auth_token(),
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 8,
+    )
+
+    return response
+
+
+@app.get("/logout")
+def logout():
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie("ai_emailer_auth")
+    return response
+
+
+# ------------------------------------------------------------
+# Public Routes
+# ------------------------------------------------------------
+
 @app.get("/")
-def home():
+def home(request: Request):
+    dashboard_link = "/dashboard" if is_logged_in(request) else "/login"
+
     return {
         "message": "AI Emailer MVP is running",
+        "dashboard": dashboard_link,
+        "demo_mode": DEMO_MODE,
         "next_steps": [
-            "Go to /dashboard",
+            "Login",
             "Create campaign",
-            "Add cadence steps",
             "Upload contacts",
+            "Import contacts from HubSpot",
+            "Export contacts to HubSpot",
             "Generate cadence drafts",
             "Edit drafts",
             "Approve drafts",
-            "Send approved drafts",
             "Use dry run before real sending",
         ],
     }
+
+
+@app.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "demo_mode": DEMO_MODE,
+    }
+
+
+@app.get("/unsubscribe/{contact_id}/{token}", response_class=HTMLResponse)
+def unsubscribe_via_link(
+    contact_id: int,
+    token: str,
+    session: Session = Depends(get_session),
+):
+    contact = session.get(Contact, contact_id)
+
+    if not contact:
+        return HTMLResponse(
+            content="""
+            <html>
+                <body style="font-family: Arial; padding: 40px;">
+                    <h2>Unsubscribe link not found</h2>
+                    <p>We could not find this contact record.</p>
+                </body>
+            </html>
+            """,
+            status_code=404,
+        )
+
+    if not verify_unsubscribe_token(contact.id, contact.email, token):
+        return HTMLResponse(
+            content="""
+            <html>
+                <body style="font-family: Arial; padding: 40px;">
+                    <h2>Invalid unsubscribe link</h2>
+                    <p>This unsubscribe link is not valid.</p>
+                </body>
+            </html>
+            """,
+            status_code=400,
+        )
+
+    contact.unsubscribed = True
+    contact.suppressed = True
+
+    existing = session.exec(
+        select(Suppression).where(Suppression.email == contact.email)
+    ).first()
+
+    if not existing:
+        suppression = Suppression(
+            email=contact.email,
+            reason="unsubscribe link",
+        )
+        session.add(suppression)
+
+    session.add(contact)
+    session.commit()
+
+    return HTMLResponse(
+        content=f"""
+        <html>
+            <body style="font-family: Arial; padding: 40px; background: #f6f7f9;">
+                <div style="background: white; padding: 30px; border-radius: 10px; max-width: 600px;">
+                    <h2>You have been unsubscribed</h2>
+                    <p>{contact.email} has been removed from future outreach.</p>
+                    <p>You can close this page.</p>
+                </div>
+            </body>
+        </html>
+        """,
+        status_code=200,
+    )
 
 
 # ------------------------------------------------------------
@@ -99,6 +287,31 @@ def get_available_send_days(cadence_steps: List[CadenceStep]):
     return days
 
 
+def safe_send_email(to_email: str, subject: str, body: str) -> dict:
+    if DEMO_MODE:
+        print("\nDEMO MODE - Real email blocked")
+        print(f"To: {to_email}")
+        print(f"Subject: {subject}")
+        print(body)
+        print("-" * 50)
+
+        return {
+            "demo_mode": True,
+            "message": "Email blocked because DEMO_MODE=true",
+        }
+
+    response = send_email_via_ses(
+        to_email=to_email,
+        subject=subject,
+        body=body,
+    )
+
+    return {
+        "demo_mode": False,
+        "response": response,
+    }
+
+
 # ------------------------------------------------------------
 # Dashboard Pages
 # ------------------------------------------------------------
@@ -109,6 +322,8 @@ def dashboard(
     message: str = "",
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
     campaigns = session.exec(select(Campaign)).all()
     contacts = session.exec(select(Contact)).all()
     cadence_steps = session.exec(select(CadenceStep)).all()
@@ -116,6 +331,46 @@ def dashboard(
     suppressions = session.exec(select(Suppression)).all()
 
     available_send_days = get_available_send_days(cadence_steps)
+
+    total_contacts = len(contacts)
+    suppressed_contacts = len([c for c in contacts if c.suppressed or c.unsubscribed])
+    active_contacts = total_contacts - suppressed_contacts
+
+    total_drafts = len(drafts)
+    approved_drafts = len([d for d in drafts if d.approved])
+    sent_drafts = len([d for d in drafts if d.sent])
+    unsent_drafts = len([d for d in drafts if not d.sent])
+    unapproved_drafts = len([d for d in drafts if not d.approved and not d.sent])
+
+    analytics = {
+        "total_campaigns": len(campaigns),
+        "total_contacts": total_contacts,
+        "active_contacts": active_contacts,
+        "suppressed_contacts": suppressed_contacts,
+        "total_drafts": total_drafts,
+        "approved_drafts": approved_drafts,
+        "sent_drafts": sent_drafts,
+        "unsent_drafts": unsent_drafts,
+        "unapproved_drafts": unapproved_drafts,
+    }
+
+    campaign_stats = []
+
+    for campaign in campaigns:
+        campaign_drafts = [d for d in drafts if d.campaign_id == campaign.id]
+        campaign_steps = [s for s in cadence_steps if s.campaign_id == campaign.id]
+
+        campaign_stats.append({
+            "id": campaign.id,
+            "name": campaign.name,
+            "audience": campaign.audience,
+            "steps": len(campaign_steps),
+            "drafts": len(campaign_drafts),
+            "approved": len([d for d in campaign_drafts if d.approved]),
+            "sent": len([d for d in campaign_drafts if d.sent]),
+            "unsent": len([d for d in campaign_drafts if not d.sent]),
+            "unapproved": len([d for d in campaign_drafts if not d.approved and not d.sent]),
+        })
 
     draft_rows = []
 
@@ -147,7 +402,7 @@ def dashboard(
             x["campaign"] or "",
             x["contact_name"] or "",
             x["step_number"] or 0,
-        )
+        ),
     )
 
     return templates.TemplateResponse(
@@ -155,12 +410,15 @@ def dashboard(
         name="dashboard.html",
         context={
             "message": message,
+            "demo_mode": DEMO_MODE,
             "campaigns": campaigns,
             "contacts": contacts,
             "cadence_steps": cadence_steps,
             "drafts": draft_rows,
             "suppressions": suppressions,
             "available_send_days": available_send_days,
+            "analytics": analytics,
+            "campaign_stats": campaign_stats,
         },
     )
 
@@ -171,6 +429,8 @@ def dashboard_edit_draft_page(
     request: Request,
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
     draft = session.get(EmailDraft, draft_id)
 
     if not draft:
@@ -188,29 +448,157 @@ def dashboard_edit_draft_page(
             "contact": contact,
             "campaign": campaign,
             "step": step,
+            "demo_mode": DEMO_MODE,
         },
     )
 
 
 # ------------------------------------------------------------
-# Dashboard Actions
+# Dashboard Actions - HubSpot
+# ------------------------------------------------------------
+
+@app.post("/dashboard/hubspot/import")
+def dashboard_import_hubspot_contacts(
+    request: Request,
+    limit: int = Form(100),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    try:
+        hubspot_data = get_hubspot_contacts(limit=limit)
+    except Exception as e:
+        return RedirectResponse(
+            url=f"/dashboard?message=HubSpot import failed: {str(e)}",
+            status_code=303,
+        )
+
+    imported = 0
+    skipped = 0
+
+    for item in hubspot_data.get("results", []):
+        props = item.get("properties", {})
+
+        email = (props.get("email") or "").strip().lower()
+
+        if not email or "@" not in email:
+            skipped += 1
+            continue
+
+        existing = session.exec(
+            select(Contact).where(Contact.email == email)
+        ).first()
+
+        if existing:
+            skipped += 1
+            continue
+
+        contact = Contact(
+            first_name=(props.get("firstname") or "").strip() or "there",
+            last_name=(props.get("lastname") or "").strip() or None,
+            email=email,
+            company=(props.get("company") or "").strip() or None,
+            industry="HubSpot Import",
+            role=(props.get("jobtitle") or "").strip() or None,
+            website=(props.get("website") or "").strip() or None,
+        )
+
+        session.add(contact)
+        imported += 1
+
+    session.commit()
+
+    return RedirectResponse(
+        url=f"/dashboard?message=Imported {imported} contacts from HubSpot. Skipped {skipped}.",
+        status_code=303,
+    )
+
+
+@app.post("/dashboard/hubspot/export")
+def dashboard_export_hubspot_contacts(
+    request: Request,
+    limit: int = Form(100),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    contacts = session.exec(
+        select(Contact).where(
+            Contact.unsubscribed == False,
+            Contact.suppressed == False,
+        )
+    ).all()
+
+    contacts = contacts[:limit]
+
+    created = 0
+    updated = 0
+    skipped = 0
+    failed = 0
+
+    for contact in contacts:
+        if not contact.email or "@" not in contact.email:
+            skipped += 1
+            continue
+
+        try:
+            result = export_contact_to_hubspot(
+                email=contact.email,
+                first_name=contact.first_name or "",
+                last_name=contact.last_name or "",
+                company=contact.company or "",
+                jobtitle=contact.role or "",
+                website=contact.website or "",
+            )
+
+            if result["status"] == "created":
+                created += 1
+            elif result["status"] == "updated":
+                updated += 1
+            else:
+                failed += 1
+                print(f"HubSpot export failed for {contact.email}: {result}")
+
+        except Exception as e:
+            failed += 1
+            print(f"HubSpot export exception for {contact.email}: {e}")
+
+    return RedirectResponse(
+        url=(
+            f"/dashboard?message="
+            f"HubSpot export complete. Created {created}, updated {updated}, "
+            f"skipped {skipped}, failed {failed}."
+        ),
+        status_code=303,
+    )
+
+
+# ------------------------------------------------------------
+# Dashboard Actions - Campaigns / Contacts / Drafts
 # ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns")
 def dashboard_create_campaign(
+    request: Request,
     name: str = Form(...),
     offer: str = Form(...),
     audience: str = Form(...),
     tone: str = Form("friendly, consultative, concise"),
     call_to_action: str = Form("Would you be open to a quick conversation?"),
+    template_subject: str = Form("Quick question for {{ company }}"),
+    template_body: str = Form(...),
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
     campaign = Campaign(
         name=name,
         offer=offer,
         audience=audience,
         tone=tone,
         call_to_action=call_to_action,
+        template_subject=template_subject,
+        template_body=template_body,
     )
 
     session.add(campaign)
@@ -227,6 +615,7 @@ def dashboard_create_campaign(
 
 @app.post("/dashboard/cadence-steps")
 def dashboard_create_cadence_step(
+    request: Request,
     campaign_id: int = Form(...),
     step_number: int = Form(...),
     send_day: int = Form(...),
@@ -234,6 +623,8 @@ def dashboard_create_cadence_step(
     purpose: str = Form(...),
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
     campaign = session.get(Campaign, campaign_id)
 
     if not campaign:
@@ -258,9 +649,12 @@ def dashboard_create_cadence_step(
 
 @app.post("/dashboard/contacts/upload")
 async def dashboard_upload_contacts(
+    request: Request,
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a CSV file.")
 
@@ -316,9 +710,12 @@ async def dashboard_upload_contacts(
 
 @app.post("/dashboard/drafts/generate")
 def dashboard_generate_drafts(
+    request: Request,
     campaign_id: int = Form(...),
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
     campaign = session.get(Campaign, campaign_id)
 
     if not campaign:
@@ -356,21 +753,27 @@ def dashboard_generate_drafts(
                 skipped += 1
                 continue
 
-            ai_email = generate_sales_email(
+            unsubscribe_url = build_unsubscribe_url(contact)
+
+            ai_email = render_template_email(
+                template_subject=campaign.template_subject or "Quick question for {{ company }}",
+                template_body=campaign.template_body or "",
                 first_name=contact.first_name,
                 company=contact.company or "",
                 industry=contact.industry or "",
                 role=contact.role or "",
+                website=contact.website or "",
                 offer=campaign.offer,
                 audience=campaign.audience,
                 tone=campaign.tone,
                 call_to_action=campaign.call_to_action,
+                unsubscribe_url=unsubscribe_url,
                 cadence_step_name=step.name,
                 cadence_step_purpose=step.purpose,
                 step_number=step.step_number,
             )
 
-            unsubscribe_line = "\n\nIf this is not relevant, reply 'unsubscribe' and I will not follow up."
+            unsubscribe_line = f"\n\nIf this is not relevant, you can unsubscribe here: {unsubscribe_url}"
 
             draft = EmailDraft(
                 contact_id=contact.id,
@@ -397,11 +800,14 @@ def dashboard_generate_drafts(
 
 @app.post("/dashboard/drafts/{draft_id}/edit")
 def dashboard_save_draft_edit(
+    request: Request,
     draft_id: int,
     subject: str = Form(...),
     body: str = Form(...),
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
     draft = session.get(EmailDraft, draft_id)
 
     if not draft:
@@ -412,8 +818,6 @@ def dashboard_save_draft_edit(
 
     draft.subject = subject
     draft.body = body
-
-    # Require re-approval after editing
     draft.approved = False
 
     session.add(draft)
@@ -427,9 +831,12 @@ def dashboard_save_draft_edit(
 
 @app.post("/dashboard/drafts/{draft_id}/approve")
 def dashboard_approve_draft(
+    request: Request,
     draft_id: int,
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
     draft = session.get(EmailDraft, draft_id)
 
     if not draft:
@@ -451,10 +858,13 @@ def dashboard_approve_draft(
 
 @app.post("/dashboard/drafts/approve-day")
 def dashboard_approve_day(
+    request: Request,
     campaign_id: int = Form(...),
     send_day: int = Form(...),
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
     drafts = session.exec(
         select(EmailDraft).where(
             EmailDraft.campaign_id == campaign_id,
@@ -480,9 +890,12 @@ def dashboard_approve_day(
 
 @app.post("/dashboard/drafts/{draft_id}/send")
 def dashboard_send_draft(
+    request: Request,
     draft_id: int,
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
     draft = session.get(EmailDraft, draft_id)
 
     if not draft:
@@ -512,11 +925,17 @@ def dashboard_send_draft(
     if suppression:
         raise HTTPException(status_code=400, detail="Email is suppressed.")
 
-    send_email_via_ses(
+    safe_send_email(
         to_email=contact.email,
         subject=draft.subject,
         body=draft.body,
     )
+
+    if DEMO_MODE:
+        return RedirectResponse(
+            url="/dashboard?message=Demo mode is on. Email was previewed in PowerShell but not sent.",
+            status_code=303,
+        )
 
     draft.sent = True
     draft.sent_at = datetime.utcnow()
@@ -532,12 +951,15 @@ def dashboard_send_draft(
 
 @app.post("/dashboard/drafts/send-day")
 def dashboard_send_day(
+    request: Request,
     campaign_id: int = Form(...),
     send_day: int = Form(...),
     max_send: int = Form(10),
     dry_run: str = Form(None),
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
     drafts = session.exec(
         select(EmailDraft).where(
             EmailDraft.campaign_id == campaign_id,
@@ -549,6 +971,7 @@ def dashboard_send_day(
 
     drafts = drafts[:max_send]
 
+    previewed_count = 0
     sent_count = 0
     skipped_count = 0
     errors = []
@@ -573,14 +996,15 @@ def dashboard_send_day(
             continue
 
         try:
-            if dry_run:
-                print("\nDRY RUN - Email not sent")
+            if dry_run or DEMO_MODE:
+                print("\nDRY RUN / DEMO MODE - Email not sent")
                 print(f"To: {contact.email}")
                 print(f"Subject: {draft.subject}")
                 print(draft.body)
                 print("-" * 50)
+                previewed_count += 1
             else:
-                send_email_via_ses(
+                safe_send_email(
                     to_email=contact.email,
                     subject=draft.subject,
                     body=draft.body,
@@ -590,15 +1014,17 @@ def dashboard_send_day(
                 draft.sent_at = datetime.utcnow()
                 session.add(draft)
 
-            sent_count += 1
+                sent_count += 1
 
         except Exception as e:
             errors.append(f"{contact.email}: {str(e)}")
 
     session.commit()
 
-    if dry_run:
-        message = f"Dry run complete. {sent_count} emails previewed for Day {send_day}. Skipped {skipped_count}."
+    if DEMO_MODE:
+        message = f"Demo mode is on. Previewed {previewed_count} emails for Day {send_day}. Nothing was sent."
+    elif dry_run:
+        message = f"Dry run complete. Previewed {previewed_count} emails for Day {send_day}. Nothing was sent."
     else:
         message = f"Sent {sent_count} emails for Day {send_day}. Skipped {skipped_count}."
 
@@ -613,9 +1039,12 @@ def dashboard_send_day(
 
 @app.post("/dashboard/contacts/{contact_id}/unsubscribe")
 def dashboard_unsubscribe_contact(
+    request: Request,
     contact_id: int,
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
     contact = session.get(Contact, contact_id)
 
     if not contact:
@@ -764,232 +1193,3 @@ def add_suppression(
 @app.get("/suppressions", response_model=List[Suppression])
 def list_suppressions(session: Session = Depends(get_session)):
     return session.exec(select(Suppression)).all()
-
-
-@app.post("/drafts/generate/{campaign_id}")
-def generate_drafts(
-    campaign_id: int,
-    session: Session = Depends(get_session),
-):
-    campaign = session.get(Campaign, campaign_id)
-
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
-
-    create_default_cadence_steps(campaign.id, session)
-
-    contacts = session.exec(
-        select(Contact).where(
-            Contact.unsubscribed == False,
-            Contact.suppressed == False,
-        )
-    ).all()
-
-    cadence_steps = session.exec(
-        select(CadenceStep).where(CadenceStep.campaign_id == campaign.id)
-    ).all()
-
-    cadence_steps = sorted(cadence_steps, key=lambda step: step.step_number)
-
-    created = 0
-    skipped = 0
-
-    for contact in contacts:
-        for step in cadence_steps:
-            existing = session.exec(
-                select(EmailDraft).where(
-                    EmailDraft.contact_id == contact.id,
-                    EmailDraft.campaign_id == campaign.id,
-                    EmailDraft.cadence_step_id == step.id,
-                )
-            ).first()
-
-            if existing:
-                skipped += 1
-                continue
-
-            ai_email = generate_sales_email(
-                first_name=contact.first_name,
-                company=contact.company or "",
-                industry=contact.industry or "",
-                role=contact.role or "",
-                offer=campaign.offer,
-                audience=campaign.audience,
-                tone=campaign.tone,
-                call_to_action=campaign.call_to_action,
-                cadence_step_name=step.name,
-                cadence_step_purpose=step.purpose,
-                step_number=step.step_number,
-            )
-
-            unsubscribe_line = "\n\nIf this is not relevant, reply 'unsubscribe' and I will not follow up."
-
-            draft = EmailDraft(
-                contact_id=contact.id,
-                campaign_id=campaign.id,
-                cadence_step_id=step.id,
-                step_number=step.step_number,
-                send_day=step.send_day,
-                subject=ai_email["subject"],
-                body=ai_email["body"] + unsubscribe_line,
-                approved=False,
-                sent=False,
-            )
-
-            session.add(draft)
-            created += 1
-
-    session.commit()
-
-    return {
-        "created": created,
-        "skipped": skipped,
-    }
-
-
-@app.get("/drafts")
-def list_drafts(session: Session = Depends(get_session)):
-    drafts = session.exec(select(EmailDraft)).all()
-
-    results = []
-
-    for draft in drafts:
-        contact = session.get(Contact, draft.contact_id)
-        campaign = session.get(Campaign, draft.campaign_id)
-        step = session.get(CadenceStep, draft.cadence_step_id) if draft.cadence_step_id else None
-
-        results.append({
-            "draft_id": draft.id,
-            "campaign": campaign.name if campaign else None,
-            "step": step.name if step else None,
-            "step_number": draft.step_number,
-            "send_day": draft.send_day,
-            "to": contact.email if contact else None,
-            "contact": f"{contact.first_name} {contact.last_name or ''}".strip() if contact else None,
-            "company": contact.company if contact else None,
-            "subject": draft.subject,
-            "body": draft.body,
-            "approved": draft.approved,
-            "sent": draft.sent,
-            "sent_at": draft.sent_at,
-        })
-
-    return results
-
-
-@app.post("/drafts/{draft_id}/approve")
-def approve_draft(
-    draft_id: int,
-    session: Session = Depends(get_session),
-):
-    draft = session.get(EmailDraft, draft_id)
-
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found.")
-
-    if draft.sent:
-        raise HTTPException(status_code=400, detail="Cannot approve a sent draft.")
-
-    draft.approved = True
-
-    session.add(draft)
-    session.commit()
-    session.refresh(draft)
-
-    return draft
-
-
-@app.post("/drafts/{draft_id}/send")
-def send_draft(
-    draft_id: int,
-    session: Session = Depends(get_session),
-):
-    draft = session.get(EmailDraft, draft_id)
-
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found.")
-
-    if not draft.approved:
-        raise HTTPException(
-            status_code=400,
-            detail="Draft must be approved before sending.",
-        )
-
-    if draft.sent:
-        raise HTTPException(
-            status_code=400,
-            detail="Draft has already been sent.",
-        )
-
-    contact = session.get(Contact, draft.contact_id)
-
-    if not contact:
-        raise HTTPException(status_code=404, detail="Contact not found.")
-
-    if contact.unsubscribed or contact.suppressed:
-        raise HTTPException(
-            status_code=400,
-            detail="Contact is unsubscribed or suppressed.",
-        )
-
-    suppression = session.exec(
-        select(Suppression).where(Suppression.email == contact.email)
-    ).first()
-
-    if suppression:
-        raise HTTPException(
-            status_code=400,
-            detail="Email is on suppression list.",
-        )
-
-    response = send_email_via_ses(
-        to_email=contact.email,
-        subject=draft.subject,
-        body=draft.body,
-    )
-
-    draft.sent = True
-    draft.sent_at = datetime.utcnow()
-
-    session.add(draft)
-    session.commit()
-    session.refresh(draft)
-
-    return {
-        "message": "Email sent",
-        "draft_id": draft.id,
-        "ses_message_id": response.get("MessageId"),
-    }
-
-
-@app.post("/contacts/{contact_id}/unsubscribe")
-def unsubscribe_contact(
-    contact_id: int,
-    session: Session = Depends(get_session),
-):
-    contact = session.get(Contact, contact_id)
-
-    if not contact:
-        raise HTTPException(status_code=404, detail="Contact not found.")
-
-    contact.unsubscribed = True
-    contact.suppressed = True
-
-    existing = session.exec(
-        select(Suppression).where(Suppression.email == contact.email)
-    ).first()
-
-    if not existing:
-        suppression = Suppression(
-            email=contact.email,
-            reason="manual unsubscribe",
-        )
-        session.add(suppression)
-
-    session.add(contact)
-    session.commit()
-
-    return {
-        "message": "Contact unsubscribed",
-        "email": contact.email,
-    }

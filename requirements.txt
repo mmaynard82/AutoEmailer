@@ -8,3 +8,4 @@ python-multipart
 pandas
 email-validator
 jinja2
+requests

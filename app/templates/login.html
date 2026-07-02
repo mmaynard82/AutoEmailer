@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Emailer Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f6f7f9;
+            color: #222;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 420px;
+            margin: 90px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 25px;
+        }
+
+        input, button {
+            width: 100%;
+            padding: 11px;
+            margin-top: 8px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            font-size: 15px;
+        }
+
+        button {
+            background: #1f5eff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .error {
+            background: #ffe8e8;
+            border-left: 5px solid #b00020;
+            padding: 12px;
+            margin-bottom: 18px;
+            color: #7a0015;
+        }
+
+        .small {
+            color: #666;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>AI Emailer</h1>
+    <div class="subtitle">Login to access the dashboard.</div>
+
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/login">
+        <label>Password</label>
+        <input type="password" name="password" required autofocus>
+
+        <button type="submit">Login</button>
+    </form>
+
+    <p class="small">
+        This is a private demo dashboard. Do not share access publicly.
+    </p>
+</div>
+
+</body>
+</html>

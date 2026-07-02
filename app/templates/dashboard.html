@@ -14,12 +14,24 @@
             margin-bottom: 5px;
         }
 
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
         .subtitle {
             color: #666;
             margin-bottom: 25px;
         }
 
         .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+
+        .mini-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 25px;
@@ -66,6 +78,16 @@
             background: #0a7a3d;
         }
 
+        button.hubspot {
+            background: #ff7a59;
+        }
+
+        a.logout {
+            color: #1f5eff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -82,6 +104,19 @@
 
         th {
             background: #eef1f5;
+        }
+
+        code {
+            background: #eef1f5;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #ddd;
+            margin: 22px 0;
         }
 
         .draft-body {
@@ -119,6 +154,28 @@
             margin-bottom: 4px;
         }
 
+        .demo-pill {
+            display: inline-block;
+            background: #fff1c7;
+            color: #8a5a00;
+            padding: 6px 10px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .live-pill {
+            display: inline-block;
+            background: #e2f7e8;
+            color: #0a7a3d;
+            padding: 6px 10px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
         .status-card {
             border-left: 5px solid #1f5eff;
         }
@@ -128,10 +185,21 @@
             border-left: 5px solid #d99a00;
         }
 
-        .mini-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
+        .danger-card {
+            background: #ffe8e8;
+            border-left: 5px solid #b00020;
+        }
+
+        .hubspot-card {
+            border-left: 5px solid #ff7a59;
+        }
+
+        .template-help {
+            background: #f6f7f9;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            line-height: 1.7;
         }
 
         label.checkbox-label {
@@ -147,12 +215,67 @@
             width: auto;
             margin: 0;
         }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 18px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border-left: 5px solid #1f5eff;
+        }
+
+        .stat-number {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .stat-warning {
+            border-left-color: #d99a00;
+        }
+
+        .stat-success {
+            border-left-color: #0a7a3d;
+        }
+
+        .stat-danger {
+            border-left-color: #b00020;
+        }
     </style>
 </head>
 <body>
 
-<h1>AI Emailer Dashboard</h1>
-<div class="subtitle">Create campaigns, upload contacts, generate cadence drafts, approve, dry run, and send.</div>
+<div class="topbar">
+    <div>
+        <h1>
+            AI Emailer Dashboard
+            {% if demo_mode %}
+                <span class="demo-pill">DEMO MODE</span>
+            {% else %}
+                <span class="live-pill">LIVE MODE</span>
+            {% endif %}
+        </h1>
+        <div class="subtitle">
+            Create campaigns, upload contacts, import/export HubSpot contacts, generate AI-personalized drafts, approve, dry run, and send.
+        </div>
+    </div>
+
+    <div>
+        <a class="logout" href="/logout">Logout</a>
+    </div>
+</div>
 
 {% if message %}
 <div class="card status-card">
@@ -160,10 +283,58 @@
 </div>
 {% endif %}
 
+{% if demo_mode %}
 <div class="card warning">
-    <strong>Safety Reminder:</strong>
-    Keep dry run checked until SES is configured and your sender/domain are verified.
-    Start with your own test email before sending to any real prospects.
+    <strong>Demo Mode Is On:</strong>
+    Real email sending is blocked. Even if dry run is unchecked, the app will only print previews in the server console.
+</div>
+{% else %}
+<div class="card danger-card">
+    <strong>Live Mode Is On:</strong>
+    Approved emails can actually send. Use caution and test with your own address first.
+</div>
+{% endif %}
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ analytics.total_campaigns }}</div>
+        <div class="stat-label">Campaigns</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-number">{{ analytics.total_contacts }}</div>
+        <div class="stat-label">Total Contacts</div>
+    </div>
+
+    <div class="stat-card stat-success">
+        <div class="stat-number">{{ analytics.active_contacts }}</div>
+        <div class="stat-label">Active Contacts</div>
+    </div>
+
+    <div class="stat-card stat-danger">
+        <div class="stat-number">{{ analytics.suppressed_contacts }}</div>
+        <div class="stat-label">Suppressed / Unsubscribed</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-number">{{ analytics.total_drafts }}</div>
+        <div class="stat-label">Drafts Generated</div>
+    </div>
+
+    <div class="stat-card stat-success">
+        <div class="stat-number">{{ analytics.approved_drafts }}</div>
+        <div class="stat-label">Drafts Approved</div>
+    </div>
+
+    <div class="stat-card stat-success">
+        <div class="stat-number">{{ analytics.sent_drafts }}</div>
+        <div class="stat-label">Drafts Sent</div>
+    </div>
+
+    <div class="stat-card stat-warning">
+        <div class="stat-number">{{ analytics.unapproved_drafts }}</div>
+        <div class="stat-label">Needs Review</div>
+    </div>
 </div>
 
 <div class="grid">
@@ -176,7 +347,7 @@
             <input type="text" name="name" required placeholder="Pipedrive for Real Estate">
 
             <label>Offer</label>
-            <textarea name="offer" required placeholder="We are Pipedrive partners and can offer a 30-day free trial..."></textarea>
+            <textarea name="offer" required placeholder="We are Pipedrive partners and can offer a 30-day free trial plus a free CRM health check."></textarea>
 
             <label>Audience</label>
             <input type="text" name="audience" required placeholder="Real estate agents and teams">
@@ -187,19 +358,79 @@
             <label>Call to Action</label>
             <input type="text" name="call_to_action" value="Would you be open to a quick CRM health check?">
 
+            <label>Template Subject</label>
+            <input type="text" name="template_subject" value="Quick question for {% raw %}{{ company }}{% endraw %}">
+
+            <label>Template Body</label>
+            <textarea name="template_body" style="height: 260px;" required>Hi {% raw %}{{ first_name }}{% endraw %},
+
+{% raw %}{{ personal_line }}{% endraw %}
+
+I’m reaching out because we help {% raw %}{{ audience }}{% endraw %} improve CRM follow-up, sales visibility, and client communication.
+
+{% raw %}{{ offer }}{% endraw %}
+
+{% raw %}{{ call_to_action }}{% endraw %}
+
+Best,
+Evolution CRM</textarea>
+
+            <div class="template-help small">
+                <strong>Available placeholders:</strong><br>
+                <code>{% raw %}{{ first_name }}{% endraw %}</code>
+                <code>{% raw %}{{ company }}{% endraw %}</code>
+                <code>{% raw %}{{ industry }}{% endraw %}</code>
+                <code>{% raw %}{{ role }}{% endraw %}</code>
+                <code>{% raw %}{{ website }}{% endraw %}</code>
+                <code>{% raw %}{{ personal_line }}{% endraw %}</code>
+                <code>{% raw %}{{ audience }}{% endraw %}</code>
+                <code>{% raw %}{{ offer }}{% endraw %}</code>
+                <code>{% raw %}{{ call_to_action }}{% endraw %}</code>
+                <code>{% raw %}{{ unsubscribe_url }}{% endraw %}</code>
+            </div>
+
             <button type="submit">Create Campaign + Default Cadence</button>
         </form>
     </div>
 
     <div class="card">
-        <h2>Upload Contacts</h2>
+        <h2>Contact Sources</h2>
 
+        <h3>Upload Contacts CSV</h3>
         <p class="small">CSV must include at least: first_name, email</p>
 
         <form method="post" action="/dashboard/contacts/upload" enctype="multipart/form-data">
             <input type="file" name="file" accept=".csv" required>
             <button type="submit">Upload CSV</button>
         </form>
+
+        <div class="card hubspot-card" style="box-shadow:none; margin-top: 20px;">
+            <h3>HubSpot Sync</h3>
+            <p class="small">
+                Import contacts from HubSpot into this app, or export active app contacts back into HubSpot.
+                Duplicates are handled by email.
+            </p>
+
+            <form method="post" action="/dashboard/hubspot/import">
+                <label>Max Contacts to Import</label>
+                <input type="number" name="limit" value="100" min="1" max="100">
+
+                <button class="hubspot" type="submit">Import Contacts from HubSpot</button>
+            </form>
+
+            <hr>
+
+            <form method="post" action="/dashboard/hubspot/export">
+                <label>Max Contacts to Export</label>
+                <input type="number" name="limit" value="100" min="1" max="100">
+
+                <button class="hubspot" type="submit">Export Contacts to HubSpot</button>
+            </form>
+
+            <p class="small">
+                Export skips contacts marked suppressed or unsubscribed.
+            </p>
+        </div>
 
         <h3>Current Contacts: {{ contacts|length }}</h3>
 
@@ -253,7 +484,7 @@
                 {% endfor %}
             </select>
 
-            <button type="submit">Generate Drafts for All Cadence Steps</button>
+            <button type="submit">Generate Template-Based Drafts</button>
         </form>
     </div>
 
@@ -262,7 +493,7 @@
 
         <p class="small">
             Use this to approve or send only one cadence day at a time.
-            Start with dry run mode until SES is fully configured.
+            In demo mode, real sending is blocked.
         </p>
 
         <div class="mini-grid">
@@ -321,6 +552,36 @@
     </div>
 
     <div class="card full-width">
+        <h2>Campaign Reporting</h2>
+
+        <table>
+            <tr>
+                <th>Campaign</th>
+                <th>Audience</th>
+                <th>Cadence Steps</th>
+                <th>Total Drafts</th>
+                <th>Approved</th>
+                <th>Sent</th>
+                <th>Unsent</th>
+                <th>Needs Review</th>
+            </tr>
+
+            {% for stat in campaign_stats %}
+            <tr>
+                <td>{{ stat.name }}</td>
+                <td>{{ stat.audience }}</td>
+                <td>{{ stat.steps }}</td>
+                <td>{{ stat.drafts }}</td>
+                <td>{{ stat.approved }}</td>
+                <td>{{ stat.sent }}</td>
+                <td>{{ stat.unsent }}</td>
+                <td>{{ stat.unapproved }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <div class="card full-width">
         <h2>Campaigns</h2>
 
         <table>
@@ -329,6 +590,7 @@
                 <th>Name</th>
                 <th>Audience</th>
                 <th>Offer</th>
+                <th>Template Subject</th>
             </tr>
 
             {% for campaign in campaigns %}
@@ -337,6 +599,7 @@
                 <td>{{ campaign.name }}</td>
                 <td>{{ campaign.audience }}</td>
                 <td>{{ campaign.offer }}</td>
+                <td>{{ campaign.template_subject }}</td>
             </tr>
             {% endfor %}
         </table>
