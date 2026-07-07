@@ -9,3 +9,4 @@ pandas
 email-validator
 jinja2
 requests
+google-genai

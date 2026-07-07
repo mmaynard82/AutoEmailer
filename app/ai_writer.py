@@ -1,13 +1,13 @@
 import os
 from dotenv import load_dotenv
-from openai import OpenAI
+from google import genai
 
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-if OPENAI_API_KEY:
-    client = OpenAI(api_key=OPENAI_API_KEY)
+if GEMINI_API_KEY:
+    client = genai.Client(api_key=GEMINI_API_KEY)
 else:
     client = None
 
@@ -64,13 +64,12 @@ Return only the sentence.
 """
 
     try:
-        response = client.responses.create(
-            model="gpt-4o-mini",
-            input=prompt,
-            temperature=0.5,
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
         )
 
-        line = response.output_text.strip()
+        line = response.text.strip() if response.text else ""
 
         if not line:
             return fallback_line
@@ -78,7 +77,7 @@ Return only the sentence.
         return line
 
     except Exception as e:
-        print(f"Personal line generation failed: {e}")
+        print(f"Gemini personal line generation failed: {e}")
         return fallback_line
 
 
@@ -134,6 +133,7 @@ def render_template_email(
     }
 
     subject = template_subject or "Quick question for {{ company }}"
+
     body = template_body or """Hi {{ first_name }},
 
 {{ personal_line }}
