@@ -5,253 +5,226 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 30px;
             background: #f6f7f9;
             color: #222;
-        }
-
-        h1 {
-            margin-bottom: 5px;
+            margin: 0;
+            padding: 0;
         }
 
         .topbar {
+            background: #1f2937;
+            color: white;
+            padding: 18px 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
-        .subtitle {
-            color: #666;
-            margin-bottom: 25px;
+        .topbar a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .container {
+            max-width: 1250px;
+            margin: 30px auto;
+            padding: 0 20px;
         }
 
         .grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
         }
 
-        .mini-grid {
+        .stats {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stat {
+            background: white;
+            padding: 16px;
+            border-radius: 10px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+        }
+
+        .stat .number {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .stat .label {
+            color: #666;
+            font-size: 13px;
         }
 
         .card {
             background: white;
             border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            padding: 22px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
         }
 
-        input, textarea, select, button {
+        h1, h2, h3 {
+            margin-top: 0;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-top: 12px;
+            margin-bottom: 5px;
+        }
+
+        input, textarea, select {
             width: 100%;
-            padding: 9px;
-            margin-top: 6px;
-            margin-bottom: 12px;
+            padding: 10px;
             box-sizing: border-box;
+            font-size: 14px;
         }
 
         textarea {
-            height: 90px;
+            min-height: 140px;
         }
 
         button {
-            cursor: pointer;
-            border: none;
-            border-radius: 6px;
+            margin-top: 14px;
+            padding: 10px 14px;
             background: #1f5eff;
             color: white;
+            border: none;
+            border-radius: 6px;
             font-weight: bold;
+            cursor: pointer;
         }
 
         button.secondary {
-            background: #444;
+            background: #374151;
         }
 
         button.danger {
-            background: #b00020;
+            background: #b91c1c;
         }
 
         button.success {
-            background: #0a7a3d;
+            background: #047857;
         }
 
-        button.hubspot {
-            background: #ff7a59;
+        button.warning {
+            background: #b45309;
         }
 
-        a.logout {
-            color: #1f5eff;
-            text-decoration: none;
+        .message {
+            background: #ecfdf5;
+            border-left: 5px solid #047857;
+            padding: 12px;
+            margin-bottom: 20px;
+        }
+
+        .warning-box {
+            background: #fff7ed;
+            border-left: 5px solid #f97316;
+            padding: 12px;
+            margin-bottom: 20px;
+        }
+
+        .demo {
+            background: #fef2f2;
+            color: #991b1b;
+            padding: 6px 10px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .live {
+            background: #ecfdf5;
+            color: #047857;
+            padding: 6px 10px;
+            border-radius: 20px;
+            font-size: 13px;
             font-weight: bold;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            background: white;
-            font-size: 14px;
+            font-size: 13px;
         }
 
         th, td {
-            padding: 10px;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 9px;
             vertical-align: top;
             text-align: left;
         }
 
         th {
-            background: #eef1f5;
+            background: #f3f4f6;
         }
 
-        code {
-            background: #eef1f5;
-            padding: 2px 5px;
-            border-radius: 4px;
+        .small {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .pill {
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .approved {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .sent {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .not-sent {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .body-preview {
+            white-space: pre-wrap;
+            max-width: 420px;
+        }
+
+        .inline-form {
+            display: inline;
+        }
+
+        .inline-form button {
+            margin-top: 0;
+            padding: 6px 9px;
             font-size: 12px;
         }
 
         hr {
-            border: none;
-            border-top: 1px solid #ddd;
-            margin: 22px 0;
+            border: 0;
+            border-top: 1px solid #e5e7eb;
+            margin: 20px 0;
         }
 
-        .draft-body {
-            white-space: pre-wrap;
-            max-width: 450px;
-        }
-
-        .status {
-            font-weight: bold;
-        }
-
-        .yes {
-            color: #0a7a3d;
-        }
-
-        .no {
-            color: #b00020;
-        }
-
-        .small {
-            font-size: 13px;
-            color: #666;
-        }
-
-        .full-width {
-            grid-column: 1 / -1;
-        }
-
-        .pill {
-            display: inline-block;
-            background: #eef1f5;
-            padding: 3px 8px;
-            border-radius: 20px;
-            font-size: 12px;
-            margin-bottom: 4px;
-        }
-
-        .demo-pill {
-            display: inline-block;
-            background: #fff1c7;
-            color: #8a5a00;
-            padding: 6px 10px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: bold;
-            margin-left: 10px;
-        }
-
-        .live-pill {
-            display: inline-block;
-            background: #e2f7e8;
-            color: #0a7a3d;
-            padding: 6px 10px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: bold;
-            margin-left: 10px;
-        }
-
-        .status-card {
-            border-left: 5px solid #1f5eff;
-        }
-
-        .warning {
-            background: #fff8e5;
-            border-left: 5px solid #d99a00;
-        }
-
-        .danger-card {
-            background: #ffe8e8;
-            border-left: 5px solid #b00020;
-        }
-
-        .hubspot-card {
-            border-left: 5px solid #ff7a59;
-        }
-
-        .template-help {
-            background: #f6f7f9;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 12px;
-            line-height: 1.7;
-        }
-
-        label.checkbox-label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            margin-top: 6px;
-            margin-bottom: 12px;
-        }
-
-        label.checkbox-label input {
-            width: auto;
-            margin: 0;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: 10px;
-            padding: 18px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            border-left: 5px solid #1f5eff;
-        }
-
-        .stat-number {
-            font-size: 28px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .stat-label {
-            color: #666;
-            font-size: 14px;
-        }
-
-        .stat-warning {
-            border-left-color: #d99a00;
-        }
-
-        .stat-success {
-            border-left-color: #0a7a3d;
-        }
-
-        .stat-danger {
-            border-left-color: #b00020;
+        @media (max-width: 950px) {
+            .grid, .stats {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -259,443 +232,382 @@
 
 <div class="topbar">
     <div>
-        <h1>
-            AI Emailer Dashboard
-            {% if demo_mode %}
-                <span class="demo-pill">DEMO MODE</span>
-            {% else %}
-                <span class="live-pill">LIVE MODE</span>
-            {% endif %}
-        </h1>
-        <div class="subtitle">
-            Create campaigns, upload contacts, import/export HubSpot contacts, generate AI-personalized drafts, approve, dry run, and send.
+        <strong>AI Emailer Dashboard</strong>
+    </div>
+    <div>
+        {% if demo_mode %}
+            <span class="demo">DEMO MODE</span>
+        {% else %}
+            <span class="live">LIVE SENDING</span>
+        {% endif %}
+        &nbsp;&nbsp;
+        <a href="/logout">Logout</a>
+    </div>
+</div>
+
+<div class="container">
+
+    {% if message %}
+        <div class="message">{{ message }}</div>
+    {% endif %}
+
+    {% if demo_mode %}
+        <div class="warning-box">
+            Demo mode is on. Emails will preview in logs but will not actually send.
+        </div>
+    {% endif %}
+
+    <div class="warning-box">
+        Use only test contacts or contacts you are authorized to contact. Do not upload purchased, scraped, or unauthorized lists.
+    </div>
+
+    <div class="stats">
+        <div class="stat">
+            <div class="number">{{ analytics.total_campaigns }}</div>
+            <div class="label">Campaigns</div>
+        </div>
+        <div class="stat">
+            <div class="number">{{ analytics.total_contacts }}</div>
+            <div class="label">Contacts</div>
+        </div>
+        <div class="stat">
+            <div class="number">{{ analytics.total_drafts }}</div>
+            <div class="label">Drafts</div>
+        </div>
+        <div class="stat">
+            <div class="number">{{ analytics.approved_drafts }}</div>
+            <div class="label">Approved</div>
+        </div>
+        <div class="stat">
+            <div class="number">{{ analytics.sent_drafts }}</div>
+            <div class="label">Sent</div>
         </div>
     </div>
 
-    <div>
-        <a class="logout" href="/logout">Logout</a>
-    </div>
-</div>
+    <div class="grid">
 
-{% if message %}
-<div class="card status-card">
-    <strong>Status:</strong> {{ message }}
-</div>
-{% endif %}
+        <div class="card">
+            <h2>1. Create Campaign</h2>
 
-{% if demo_mode %}
-<div class="card warning">
-    <strong>Demo Mode Is On:</strong>
-    Real email sending is blocked. Even if dry run is unchecked, the app will only print previews in the server console.
-</div>
-{% else %}
-<div class="card danger-card">
-    <strong>Live Mode Is On:</strong>
-    Approved emails can actually send. Use caution and test with your own address first.
-</div>
-{% endif %}
+            <form method="post" action="/dashboard/campaigns">
+                <label>Campaign Name</label>
+                <input type="text" name="name" required placeholder="Real Estate CRM Health Check">
 
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-number">{{ analytics.total_campaigns }}</div>
-        <div class="stat-label">Campaigns</div>
-    </div>
+                <label>Audience</label>
+                <input type="text" name="audience" value="small businesses">
 
-    <div class="stat-card">
-        <div class="stat-number">{{ analytics.total_contacts }}</div>
-        <div class="stat-label">Total Contacts</div>
-    </div>
+                <label>Offer</label>
+                <textarea name="offer" required>We help small businesses clean up their CRM and improve follow-up.</textarea>
 
-    <div class="stat-card stat-success">
-        <div class="stat-number">{{ analytics.active_contacts }}</div>
-        <div class="stat-label">Active Contacts</div>
-    </div>
+                <label>Tone</label>
+                <input type="text" name="tone" value="friendly, consultative, concise">
 
-    <div class="stat-card stat-danger">
-        <div class="stat-number">{{ analytics.suppressed_contacts }}</div>
-        <div class="stat-label">Suppressed / Unsubscribed</div>
-    </div>
+                <label>Call to Action</label>
+                <input type="text" name="call_to_action" value="Would you be open to a quick CRM health check?">
 
-    <div class="stat-card">
-        <div class="stat-number">{{ analytics.total_drafts }}</div>
-        <div class="stat-label">Drafts Generated</div>
-    </div>
+                <label>Template Subject</label>
+                <input type="text" name="template_subject" value="Quick question for {{ company }}">
 
-    <div class="stat-card stat-success">
-        <div class="stat-number">{{ analytics.approved_drafts }}</div>
-        <div class="stat-label">Drafts Approved</div>
-    </div>
+                <label>Template Body</label>
+                <textarea name="template_body" required>Hi {{ first_name }},
 
-    <div class="stat-card stat-success">
-        <div class="stat-number">{{ analytics.sent_drafts }}</div>
-        <div class="stat-label">Drafts Sent</div>
-    </div>
+{{ personal_line }}
 
-    <div class="stat-card stat-warning">
-        <div class="stat-number">{{ analytics.unapproved_drafts }}</div>
-        <div class="stat-label">Needs Review</div>
-    </div>
-</div>
+I’m reaching out because we help {{ audience }} improve CRM follow-up, sales visibility, and client communication.
 
-<div class="grid">
+{{ offer }}
 
-    <div class="card">
-        <h2>Create Campaign</h2>
-
-        <form method="post" action="/dashboard/campaigns">
-            <label>Campaign Name</label>
-            <input type="text" name="name" required placeholder="Pipedrive for Real Estate">
-
-            <label>Offer</label>
-            <textarea name="offer" required placeholder="We are Pipedrive partners and can offer a 30-day free trial plus a free CRM health check."></textarea>
-
-            <label>Audience</label>
-            <input type="text" name="audience" required placeholder="Real estate agents and teams">
-
-            <label>Tone</label>
-            <input type="text" name="tone" value="friendly, consultative, concise">
-
-            <label>Call to Action</label>
-            <input type="text" name="call_to_action" value="Would you be open to a quick CRM health check?">
-
-            <label>Template Subject</label>
-            <input type="text" name="template_subject" value="Quick question for {% raw %}{{ company }}{% endraw %}">
-
-            <label>Template Body</label>
-            <textarea name="template_body" style="height: 260px;" required>Hi {% raw %}{{ first_name }}{% endraw %},
-
-{% raw %}{{ personal_line }}{% endraw %}
-
-I’m reaching out because we help {% raw %}{{ audience }}{% endraw %} improve CRM follow-up, sales visibility, and client communication.
-
-{% raw %}{{ offer }}{% endraw %}
-
-{% raw %}{{ call_to_action }}{% endraw %}
+{{ call_to_action }}
 
 Best,
 Evolution CRM</textarea>
 
-            <div class="template-help small">
-                <strong>Available placeholders:</strong><br>
-                <code>{% raw %}{{ first_name }}{% endraw %}</code>
-                <code>{% raw %}{{ company }}{% endraw %}</code>
-                <code>{% raw %}{{ industry }}{% endraw %}</code>
-                <code>{% raw %}{{ role }}{% endraw %}</code>
-                <code>{% raw %}{{ website }}{% endraw %}</code>
-                <code>{% raw %}{{ personal_line }}{% endraw %}</code>
-                <code>{% raw %}{{ audience }}{% endraw %}</code>
-                <code>{% raw %}{{ offer }}{% endraw %}</code>
-                <code>{% raw %}{{ call_to_action }}{% endraw %}</code>
-                <code>{% raw %}{{ unsubscribe_url }}{% endraw %}</code>
-            </div>
+                <button type="submit">Create Campaign</button>
+            </form>
+        </div>
 
-            <button type="submit">Create Campaign + Default Cadence</button>
-        </form>
-    </div>
+        <div class="card">
+            <h2>2. Add One Email Step</h2>
+            <p class="small">Campaigns no longer auto-create 4 steps. Add only the step you want.</p>
 
-    <div class="card">
-        <h2>Contact Sources</h2>
+            <form method="post" action="/dashboard/cadence-steps">
+                <label>Campaign</label>
+                <select name="campaign_id" required>
+                    {% for campaign in campaigns %}
+                        <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+                    {% endfor %}
+                </select>
 
-        <h3>Upload Contacts CSV</h3>
-        <p class="small">CSV must include at least: first_name, email</p>
+                <label>Step Number</label>
+                <input type="number" name="step_number" value="1" min="1" required>
 
-        <form method="post" action="/dashboard/contacts/upload" enctype="multipart/form-data">
-            <input type="file" name="file" accept=".csv" required>
-            <button type="submit">Upload CSV</button>
-        </form>
+                <label>Send Day</label>
+                <input type="number" name="send_day" value="1" min="1" required>
 
-        <div class="card hubspot-card" style="box-shadow:none; margin-top: 20px;">
-            <h3>HubSpot Sync</h3>
-            <p class="small">
-                Import contacts from HubSpot into this app, or export active app contacts back into HubSpot.
-                Duplicates are handled by email.
-            </p>
+                <label>Step Name</label>
+                <input type="text" name="name" value="Intro Email" required>
 
-            <form method="post" action="/dashboard/hubspot/import">
-                <label>Max Contacts to Import</label>
-                <input type="number" name="limit" value="100" min="1" max="100">
+                <label>Purpose</label>
+                <textarea name="purpose" required>Introduce the offer and ask for a brief conversation.</textarea>
 
-                <button class="hubspot" type="submit">Import Contacts from HubSpot</button>
+                <button type="submit">Add This One Step</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>3. Upload Contacts to One Campaign</h2>
+            <p class="small">Contacts uploaded here will only be used for the campaign you select.</p>
+
+            <form method="post" action="/dashboard/contacts/upload" enctype="multipart/form-data">
+                <label>Campaign</label>
+                <select name="campaign_id" required>
+                    {% for campaign in campaigns %}
+                        <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+                    {% endfor %}
+                </select>
+
+                <label>CSV File</label>
+                <input type="file" name="file" accept=".csv" required>
+
+                <button type="submit">Upload Contacts to Selected Campaign</button>
             </form>
 
             <hr>
 
-            <form method="post" action="/dashboard/hubspot/export">
-                <label>Max Contacts to Export</label>
-                <input type="number" name="limit" value="100" min="1" max="100">
+            <h3>HubSpot Import</h3>
+            <form method="post" action="/dashboard/hubspot/import">
+                <label>Campaign</label>
+                <select name="campaign_id" required>
+                    {% for campaign in campaigns %}
+                        <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+                    {% endfor %}
+                </select>
 
-                <button class="hubspot" type="submit">Export Contacts to HubSpot</button>
+                <label>Max Contacts</label>
+                <input type="number" name="limit" value="10" min="1" max="100">
+
+                <button class="secondary" type="submit">Import HubSpot Contacts to Campaign</button>
             </form>
 
-            <p class="small">
-                Export skips contacts marked suppressed or unsubscribed.
-            </p>
+            <hr>
+
+            <h3>HubSpot Export</h3>
+            <form method="post" action="/dashboard/hubspot/export">
+                <label>Campaign</label>
+                <select name="campaign_id" required>
+                    {% for campaign in campaigns %}
+                        <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+                    {% endfor %}
+                </select>
+
+                <label>Max Contacts</label>
+                <input type="number" name="limit" value="10" min="1" max="100">
+
+                <button class="secondary" type="submit">Export Campaign Contacts to HubSpot</button>
+            </form>
         </div>
 
-        <h3>Current Contacts: {{ contacts|length }}</h3>
+        <div class="card">
+            <h2>4. Generate / Approve / Send</h2>
 
-        <ul>
-            {% for contact in contacts[:8] %}
-                <li>
-                    {{ contact.first_name }} {{ contact.last_name or "" }} — {{ contact.email }}
-                    {% if contact.suppressed or contact.unsubscribed %}
-                        <span class="no">(suppressed)</span>
-                    {% endif %}
-                </li>
-            {% endfor %}
-        </ul>
-    </div>
+            <form method="post" action="/dashboard/drafts/generate">
+                <label>Campaign</label>
+                <select name="campaign_id" required>
+                    {% for campaign in campaigns %}
+                        <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+                    {% endfor %}
+                </select>
 
-    <div class="card full-width">
-        <h2>Add Custom Cadence Step</h2>
+                <button type="submit">Generate Drafts for This Campaign Only</button>
+            </form>
 
-        <form method="post" action="/dashboard/cadence-steps">
-            <label>Campaign</label>
-            <select name="campaign_id" required>
-                {% for campaign in campaigns %}
-                    <option value="{{ campaign.id }}">{{ campaign.name }}</option>
-                {% endfor %}
-            </select>
+            <hr>
 
-            <label>Step Number</label>
-            <input type="number" name="step_number" value="5" required>
+            <h3>Approve All Drafts</h3>
+            <form method="post" action="/dashboard/drafts/approve-campaign">
+                <label>Campaign</label>
+                <select name="campaign_id" required>
+                    {% for campaign in campaigns %}
+                        <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+                    {% endfor %}
+                </select>
 
-            <label>Send Day</label>
-            <input type="number" name="send_day" value="21" required>
+                <button class="success" type="submit">Approve All Unsent Drafts for Campaign</button>
+            </form>
 
-            <label>Step Name</label>
-            <input type="text" name="name" value="Final Follow-Up" required>
+            <hr>
 
-            <label>Purpose</label>
-            <textarea name="purpose" required>Politely follow up one final time and ask whether to close the loop.</textarea>
+            <h3>Approve One Send Day</h3>
+            <form method="post" action="/dashboard/drafts/approve-day">
+                <label>Campaign</label>
+                <select name="campaign_id" required>
+                    {% for campaign in campaigns %}
+                        <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+                    {% endfor %}
+                </select>
 
-            <button type="submit">Add Cadence Step</button>
-        </form>
-    </div>
+                <label>Send Day</label>
+                <input type="number" name="send_day" value="1" min="1">
 
-    <div class="card full-width">
-        <h2>Generate Cadence Drafts</h2>
+                <button class="success" type="submit">Approve This Day</button>
+            </form>
 
-        <form method="post" action="/dashboard/drafts/generate">
-            <label>Select Campaign</label>
-            <select name="campaign_id" required>
-                {% for campaign in campaigns %}
-                    <option value="{{ campaign.id }}">{{ campaign.name }}</option>
-                {% endfor %}
-            </select>
+            <hr>
 
-            <button type="submit">Generate Template-Based Drafts</button>
-        </form>
-    </div>
+            <h3>Send / Preview One Day</h3>
+            <form method="post" action="/dashboard/drafts/send-day">
+                <label>Campaign</label>
+                <select name="campaign_id" required>
+                    {% for campaign in campaigns %}
+                        <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+                    {% endfor %}
+                </select>
 
-    <div class="card full-width">
-        <h2>Send Queue by Cadence Day</h2>
+                <label>Send Day</label>
+                <input type="number" name="send_day" value="1" min="1">
 
-        <p class="small">
-            Use this to approve or send only one cadence day at a time.
-            In demo mode, real sending is blocked.
-        </p>
+                <label>Max Send</label>
+                <input type="number" name="max_send" value="1" min="1">
 
-        <div class="mini-grid">
-            <div>
-                <h3>Approve Drafts for a Day</h3>
+                <label>
+                    <input type="checkbox" name="dry_run" value="yes" checked>
+                    Dry run / preview only
+                </label>
 
-                <form method="post" action="/dashboard/drafts/approve-day">
-                    <label>Campaign</label>
-                    <select name="campaign_id" required>
-                        {% for campaign in campaigns %}
-                            <option value="{{ campaign.id }}">{{ campaign.name }}</option>
-                        {% endfor %}
-                    </select>
-
-                    <label>Cadence Day</label>
-                    <select name="send_day" required>
-                        {% for day in available_send_days %}
-                            <option value="{{ day }}">Day {{ day }}</option>
-                        {% endfor %}
-                    </select>
-
-                    <button class="success" type="submit">Approve Drafts for This Day</button>
-                </form>
-            </div>
-
-            <div>
-                <h3>Send Approved Drafts for a Day</h3>
-
-                <form method="post" action="/dashboard/drafts/send-day">
-                    <label>Campaign</label>
-                    <select name="campaign_id" required>
-                        {% for campaign in campaigns %}
-                            <option value="{{ campaign.id }}">{{ campaign.name }}</option>
-                        {% endfor %}
-                    </select>
-
-                    <label>Cadence Day</label>
-                    <select name="send_day" required>
-                        {% for day in available_send_days %}
-                            <option value="{{ day }}">Day {{ day }}</option>
-                        {% endfor %}
-                    </select>
-
-                    <label>Max Emails to Send</label>
-                    <input type="number" name="max_send" value="10" min="1" max="100">
-
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="dry_run" value="yes" checked>
-                        Dry run only — do not actually send
-                    </label>
-
-                    <button type="submit">Run Send Queue</button>
-                </form>
-            </div>
+                <button class="warning" type="submit">Preview or Send This Day</button>
+            </form>
         </div>
+
     </div>
 
-    <div class="card full-width">
-        <h2>Campaign Reporting</h2>
+    <div class="card">
+        <h2>Campaign Summary</h2>
 
         <table>
-            <tr>
-                <th>Campaign</th>
-                <th>Audience</th>
-                <th>Cadence Steps</th>
-                <th>Total Drafts</th>
-                <th>Approved</th>
-                <th>Sent</th>
-                <th>Unsent</th>
-                <th>Needs Review</th>
-            </tr>
-
-            {% for stat in campaign_stats %}
-            <tr>
-                <td>{{ stat.name }}</td>
-                <td>{{ stat.audience }}</td>
-                <td>{{ stat.steps }}</td>
-                <td>{{ stat.drafts }}</td>
-                <td>{{ stat.approved }}</td>
-                <td>{{ stat.sent }}</td>
-                <td>{{ stat.unsent }}</td>
-                <td>{{ stat.unapproved }}</td>
-            </tr>
-            {% endfor %}
+            <thead>
+                <tr>
+                    <th>Campaign</th>
+                    <th>Audience</th>
+                    <th>Contacts</th>
+                    <th>Steps</th>
+                    <th>Drafts</th>
+                    <th>Approved</th>
+                    <th>Sent</th>
+                    <th>Unapproved</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stat in campaign_stats %}
+                    <tr>
+                        <td>{{ stat.name }}</td>
+                        <td>{{ stat.audience }}</td>
+                        <td>{{ stat.contacts }}</td>
+                        <td>{{ stat.steps }}</td>
+                        <td>{{ stat.drafts }}</td>
+                        <td>{{ stat.approved }}</td>
+                        <td>{{ stat.sent }}</td>
+                        <td>{{ stat.unapproved }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
         </table>
     </div>
 
-    <div class="card full-width">
-        <h2>Campaigns</h2>
+    <div class="card">
+        <h2>Email Steps</h2>
 
         <table>
-            <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Audience</th>
-                <th>Offer</th>
-                <th>Template Subject</th>
-            </tr>
-
-            {% for campaign in campaigns %}
-            <tr>
-                <td>{{ campaign.id }}</td>
-                <td>{{ campaign.name }}</td>
-                <td>{{ campaign.audience }}</td>
-                <td>{{ campaign.offer }}</td>
-                <td>{{ campaign.template_subject }}</td>
-            </tr>
-            {% endfor %}
+            <thead>
+                <tr>
+                    <th>Campaign ID</th>
+                    <th>Step</th>
+                    <th>Day</th>
+                    <th>Name</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for step in cadence_steps %}
+                    <tr>
+                        <td>{{ step.campaign_id }}</td>
+                        <td>{{ step.step_number }}</td>
+                        <td>{{ step.send_day }}</td>
+                        <td>{{ step.name }}</td>
+                        <td>{{ step.purpose }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
         </table>
     </div>
 
-    <div class="card full-width">
-        <h2>Cadence Steps</h2>
+    <div class="card">
+        <h2>Drafts</h2>
 
         <table>
-            <tr>
-                <th>Campaign ID</th>
-                <th>Step</th>
-                <th>Send Day</th>
-                <th>Name</th>
-                <th>Purpose</th>
-            </tr>
+            <thead>
+                <tr>
+                    <th>Campaign</th>
+                    <th>Step</th>
+                    <th>Day</th>
+                    <th>Contact</th>
+                    <th>Company</th>
+                    <th>Subject</th>
+                    <th>Body</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
 
-            {% for step in cadence_steps %}
-            <tr>
-                <td>{{ step.campaign_id }}</td>
-                <td>{{ step.step_number }}</td>
-                <td>Day {{ step.send_day }}</td>
-                <td>{{ step.name }}</td>
-                <td>{{ step.purpose }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-    </div>
+            <tbody>
+                {% for draft in drafts %}
+                    <tr>
+                        <td>{{ draft.campaign }}</td>
+                        <td>{{ draft.step_number }} - {{ draft.step_name }}</td>
+                        <td>{{ draft.send_day }}</td>
+                        <td>
+                            {{ draft.contact_name }}<br>
+                            <span class="small">{{ draft.to }}</span>
+                        </td>
+                        <td>{{ draft.company }}</td>
+                        <td>{{ draft.subject }}</td>
+                        <td class="body-preview">{{ draft.body }}</td>
+                        <td>
+                            {% if draft.approved %}
+                                <span class="pill approved">Approved</span>
+                            {% else %}
+                                <span class="pill pending">Pending</span>
+                            {% endif %}
 
-    <div class="card full-width">
-        <h2>Email Drafts</h2>
+                            <br><br>
 
-        <table>
-            <tr>
-                <th>ID</th>
-                <th>To</th>
-                <th>Campaign / Step</th>
-                <th>Subject</th>
-                <th>Body</th>
-                <th>Approved</th>
-                <th>Sent</th>
-                <th>Actions</th>
-            </tr>
+                            {% if draft.sent %}
+                                <span class="pill sent">Sent</span>
+                            {% else %}
+                                <span class="pill not-sent">Not Sent</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="/dashboard/drafts/{{ draft.id }}/edit">Edit</a>
 
-            {% for draft in drafts %}
-            <tr>
-                <td>{{ draft.id }}</td>
-                <td>
-                    {{ draft.contact_name }}<br>
-                    <span class="small">{{ draft.to }}</span><br>
-                    <span class="small">{{ draft.company }}</span>
-                </td>
-                <td>
-                    <strong>{{ draft.campaign }}</strong><br>
-                    <span class="pill">Step {{ draft.step_number }}</span><br>
-                    <span class="pill">Day {{ draft.send_day }}</span><br>
-                    <span class="small">{{ draft.step_name }}</span>
-                </td>
-                <td>{{ draft.subject }}</td>
-                <td class="draft-body">{{ draft.body }}</td>
-                <td>
-                    {% if draft.approved %}
-                        <span class="status yes">Yes</span>
-                    {% else %}
-                        <span class="status no">No</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if draft.sent %}
-                        <span class="status yes">Yes</span><br>
-                        <span class="small">{{ draft.sent_at }}</span>
-                    {% else %}
-                        <span class="status no">No</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if not draft.sent %}
-                        <a href="/dashboard/drafts/{{ draft.id }}/edit">
-                            <button class="secondary" type="button">Edit</button>
-                        </a>
-                    {% endif %}
+                            <br><br>
 
-                    {% if not draft.approved and not draft.sent %}
-                        <form method="post" action="/dashboard/drafts/{{ draft.id }}/approve">
-                            <button class="success" type="submit">Approve</button>
-                        </form>
-                    {% endif %}
+                            {% if not draft.approved and not draft.sent %}
+                                <form class="inline-form" method="post" action="/dashboard/drafts/{{ draft.id }}/approve">
+                                    <button class="success" type="submit">Approve</button>
+                                </form>
+                            {% endif %}
 
-                    {% if draft.approved and not draft.sent %}
-                        <form method="post" action="/dashboard/drafts/{{ draft.id }}/send">
-                            <button type="submit">Send</button>
-                        </form>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
+                            <br><br>
+
+                            {% if draft.approved and not draft.sent %}
+                                <form class="inline-form" method="post" action="/dashboard/drafts/{{ draft.id }}/send">
+                                    <button class="warning" type="submit">Send/Preview</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
         </table>
     </div>
 

@@ -6,6 +6,8 @@ from sqlmodel import SQLModel, Field
 class Contact(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
+    campaign_id: Optional[int] = Field(default=None, index=True)
+
     first_name: str
     last_name: Optional[str] = None
     email: str = Field(index=True)
@@ -26,7 +28,7 @@ class Campaign(SQLModel, table=True):
 
     name: str
     offer: str
-    audience: str
+    audience: str = "small businesses"
     tone: str = "professional, helpful, concise"
     call_to_action: str = "Would you be open to a brief conversation?"
 

@@ -24,7 +24,6 @@ app = FastAPI(title="AI Emailer MVP")
 
 templates = Jinja2Templates(directory="app/templates")
 
-
 DEMO_MODE = os.getenv("DEMO_MODE", "true").lower() == "true"
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme")
 SECRET_KEY = os.getenv("SECRET_KEY", "local-dev-secret")
@@ -143,12 +142,10 @@ def home(request: Request):
         "next_steps": [
             "Login",
             "Create campaign",
-            "Upload contacts",
-            "Import contacts from HubSpot",
-            "Export contacts to HubSpot",
-            "Generate cadence drafts",
-            "Edit drafts",
-            "Approve drafts",
+            "Add one cadence step",
+            "Upload contacts to that campaign",
+            "Generate drafts for that campaign only",
+            "Approve drafts in bulk",
             "Use dry run before real sending",
         ],
     }
@@ -230,59 +227,14 @@ def unsubscribe_via_link(
 
 
 # ------------------------------------------------------------
-# Helper Functions
+# Helpers
 # ------------------------------------------------------------
-
-def create_default_cadence_steps(campaign_id: int, session: Session):
-    existing_steps = session.exec(
-        select(CadenceStep).where(CadenceStep.campaign_id == campaign_id)
-    ).all()
-
-    if existing_steps:
-        return
-
-    default_steps = [
-        CadenceStep(
-            campaign_id=campaign_id,
-            step_number=1,
-            send_day=1,
-            name="Intro Email",
-            purpose="Introduce the offer and ask for a brief conversation.",
-        ),
-        CadenceStep(
-            campaign_id=campaign_id,
-            step_number=2,
-            send_day=3,
-            name="Follow-Up",
-            purpose="Politely follow up and restate the problem being solved.",
-        ),
-        CadenceStep(
-            campaign_id=campaign_id,
-            step_number=3,
-            send_day=7,
-            name="Value Email",
-            purpose="Share a helpful CRM insight or checklist-style value point.",
-        ),
-        CadenceStep(
-            campaign_id=campaign_id,
-            step_number=4,
-            send_day=14,
-            name="Close Loop",
-            purpose="Ask whether to close the loop or reconnect later.",
-        ),
-    ]
-
-    for step in default_steps:
-        session.add(step)
-
-    session.commit()
-
 
 def get_available_send_days(cadence_steps: List[CadenceStep]):
     days = sorted(list({step.send_day for step in cadence_steps}))
 
     if not days:
-        days = [1, 3, 7, 14, 21]
+        days = []
 
     return days
 
@@ -313,7 +265,7 @@ def safe_send_email(to_email: str, subject: str, body: str) -> dict:
 
 
 # ------------------------------------------------------------
-# Dashboard Pages
+# Dashboard
 # ------------------------------------------------------------
 
 @app.get("/dashboard")
@@ -336,27 +288,22 @@ def dashboard(
     suppressed_contacts = len([c for c in contacts if c.suppressed or c.unsubscribed])
     active_contacts = total_contacts - suppressed_contacts
 
-    total_drafts = len(drafts)
-    approved_drafts = len([d for d in drafts if d.approved])
-    sent_drafts = len([d for d in drafts if d.sent])
-    unsent_drafts = len([d for d in drafts if not d.sent])
-    unapproved_drafts = len([d for d in drafts if not d.approved and not d.sent])
-
     analytics = {
         "total_campaigns": len(campaigns),
         "total_contacts": total_contacts,
         "active_contacts": active_contacts,
         "suppressed_contacts": suppressed_contacts,
-        "total_drafts": total_drafts,
-        "approved_drafts": approved_drafts,
-        "sent_drafts": sent_drafts,
-        "unsent_drafts": unsent_drafts,
-        "unapproved_drafts": unapproved_drafts,
+        "total_drafts": len(drafts),
+        "approved_drafts": len([d for d in drafts if d.approved]),
+        "sent_drafts": len([d for d in drafts if d.sent]),
+        "unsent_drafts": len([d for d in drafts if not d.sent]),
+        "unapproved_drafts": len([d for d in drafts if not d.approved and not d.sent]),
     }
 
     campaign_stats = []
 
     for campaign in campaigns:
+        campaign_contacts = [c for c in contacts if c.campaign_id == campaign.id]
         campaign_drafts = [d for d in drafts if d.campaign_id == campaign.id]
         campaign_steps = [s for s in cadence_steps if s.campaign_id == campaign.id]
 
@@ -364,6 +311,7 @@ def dashboard(
             "id": campaign.id,
             "name": campaign.name,
             "audience": campaign.audience,
+            "contacts": len(campaign_contacts),
             "steps": len(campaign_steps),
             "drafts": len(campaign_drafts),
             "approved": len([d for d in campaign_drafts if d.approved]),
@@ -400,8 +348,8 @@ def dashboard(
         draft_rows,
         key=lambda x: (
             x["campaign"] or "",
-            x["contact_name"] or "",
             x["step_number"] or 0,
+            x["contact_name"] or "",
         ),
     )
 
@@ -454,16 +402,22 @@ def dashboard_edit_draft_page(
 
 
 # ------------------------------------------------------------
-# Dashboard Actions - HubSpot
+# HubSpot Actions
 # ------------------------------------------------------------
 
 @app.post("/dashboard/hubspot/import")
 def dashboard_import_hubspot_contacts(
     request: Request,
+    campaign_id: int = Form(...),
     limit: int = Form(100),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
+
+    campaign = session.get(Campaign, campaign_id)
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found.")
 
     try:
         hubspot_data = get_hubspot_contacts(limit=limit)
@@ -486,7 +440,10 @@ def dashboard_import_hubspot_contacts(
             continue
 
         existing = session.exec(
-            select(Contact).where(Contact.email == email)
+            select(Contact).where(
+                Contact.email == email,
+                Contact.campaign_id == campaign_id,
+            )
         ).first()
 
         if existing:
@@ -494,6 +451,7 @@ def dashboard_import_hubspot_contacts(
             continue
 
         contact = Contact(
+            campaign_id=campaign_id,
             first_name=(props.get("firstname") or "").strip() or "there",
             last_name=(props.get("lastname") or "").strip() or None,
             email=email,
@@ -509,7 +467,7 @@ def dashboard_import_hubspot_contacts(
     session.commit()
 
     return RedirectResponse(
-        url=f"/dashboard?message=Imported {imported} contacts from HubSpot. Skipped {skipped}.",
+        url=f"/dashboard?message=Imported {imported} HubSpot contacts into {campaign.name}. Skipped {skipped}.",
         status_code=303,
     )
 
@@ -517,13 +475,20 @@ def dashboard_import_hubspot_contacts(
 @app.post("/dashboard/hubspot/export")
 def dashboard_export_hubspot_contacts(
     request: Request,
+    campaign_id: int = Form(...),
     limit: int = Form(100),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
 
+    campaign = session.get(Campaign, campaign_id)
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found.")
+
     contacts = session.exec(
         select(Contact).where(
+            Contact.campaign_id == campaign_id,
             Contact.unsubscribed == False,
             Contact.suppressed == False,
         )
@@ -566,7 +531,7 @@ def dashboard_export_hubspot_contacts(
     return RedirectResponse(
         url=(
             f"/dashboard?message="
-            f"HubSpot export complete. Created {created}, updated {updated}, "
+            f"HubSpot export for {campaign.name} complete. Created {created}, updated {updated}, "
             f"skipped {skipped}, failed {failed}."
         ),
         status_code=303,
@@ -574,7 +539,7 @@ def dashboard_export_hubspot_contacts(
 
 
 # ------------------------------------------------------------
-# Dashboard Actions - Campaigns / Contacts / Drafts
+# Campaigns / Contacts / Cadence Steps
 # ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns")
@@ -582,7 +547,7 @@ def dashboard_create_campaign(
     request: Request,
     name: str = Form(...),
     offer: str = Form(...),
-    audience: str = Form(...),
+    audience: str = Form("small businesses"),
     tone: str = Form("friendly, consultative, concise"),
     call_to_action: str = Form("Would you be open to a quick conversation?"),
     template_subject: str = Form("Quick question for {{ company }}"),
@@ -594,7 +559,7 @@ def dashboard_create_campaign(
     campaign = Campaign(
         name=name,
         offer=offer,
-        audience=audience,
+        audience=audience or "small businesses",
         tone=tone,
         call_to_action=call_to_action,
         template_subject=template_subject,
@@ -603,12 +568,9 @@ def dashboard_create_campaign(
 
     session.add(campaign)
     session.commit()
-    session.refresh(campaign)
-
-    create_default_cadence_steps(campaign.id, session)
 
     return RedirectResponse(
-        url="/dashboard?message=Campaign created with default cadence steps.",
+        url="/dashboard?message=Campaign created. Now add one email step.",
         status_code=303,
     )
 
@@ -642,7 +604,7 @@ def dashboard_create_cadence_step(
     session.commit()
 
     return RedirectResponse(
-        url="/dashboard?message=Custom cadence step added.",
+        url=f"/dashboard?message=Added one email step to {campaign.name}.",
         status_code=303,
     )
 
@@ -650,10 +612,16 @@ def dashboard_create_cadence_step(
 @app.post("/dashboard/contacts/upload")
 async def dashboard_upload_contacts(
     request: Request,
+    campaign_id: int = Form(...),
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
+
+    campaign = session.get(Campaign, campaign_id)
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found.")
 
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a CSV file.")
@@ -680,7 +648,10 @@ async def dashboard_upload_contacts(
             continue
 
         existing = session.exec(
-            select(Contact).where(Contact.email == email)
+            select(Contact).where(
+                Contact.email == email,
+                Contact.campaign_id == campaign_id,
+            )
         ).first()
 
         if existing:
@@ -688,7 +659,8 @@ async def dashboard_upload_contacts(
             continue
 
         contact = Contact(
-            first_name=str(row.get("first_name", "")).strip(),
+            campaign_id=campaign_id,
+            first_name=str(row.get("first_name", "")).strip() or "there",
             last_name=str(row.get("last_name", "")).strip() if "last_name" in df.columns else None,
             email=email,
             company=str(row.get("company", "")).strip() if "company" in df.columns else None,
@@ -703,10 +675,14 @@ async def dashboard_upload_contacts(
     session.commit()
 
     return RedirectResponse(
-        url=f"/dashboard?message=Imported {imported} contacts. Skipped {skipped}.",
+        url=f"/dashboard?message=Imported {imported} contacts into {campaign.name}. Skipped {skipped}.",
         status_code=303,
     )
 
+
+# ------------------------------------------------------------
+# Draft Generation / Approval / Sending
+# ------------------------------------------------------------
 
 @app.post("/dashboard/drafts/generate")
 def dashboard_generate_drafts(
@@ -721,20 +697,31 @@ def dashboard_generate_drafts(
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    create_default_cadence_steps(campaign.id, session)
-
     contacts = session.exec(
         select(Contact).where(
+            Contact.campaign_id == campaign_id,
             Contact.unsubscribed == False,
             Contact.suppressed == False,
         )
     ).all()
 
     cadence_steps = session.exec(
-        select(CadenceStep).where(CadenceStep.campaign_id == campaign.id)
+        select(CadenceStep).where(CadenceStep.campaign_id == campaign_id)
     ).all()
 
     cadence_steps = sorted(cadence_steps, key=lambda step: step.step_number)
+
+    if not contacts:
+        return RedirectResponse(
+            url="/dashboard?message=No contacts found for this campaign. Upload contacts to this campaign first.",
+            status_code=303,
+        )
+
+    if not cadence_steps:
+        return RedirectResponse(
+            url="/dashboard?message=No email steps found. Add one email step before generating drafts.",
+            status_code=303,
+        )
 
     created = 0
     skipped = 0
@@ -744,7 +731,7 @@ def dashboard_generate_drafts(
             existing = session.exec(
                 select(EmailDraft).where(
                     EmailDraft.contact_id == contact.id,
-                    EmailDraft.campaign_id == campaign.id,
+                    EmailDraft.campaign_id == campaign_id,
                     EmailDraft.cadence_step_id == step.id,
                 )
             ).first()
@@ -764,7 +751,7 @@ def dashboard_generate_drafts(
                 role=contact.role or "",
                 website=contact.website or "",
                 offer=campaign.offer,
-                audience=campaign.audience,
+                audience=campaign.audience or "small businesses",
                 tone=campaign.tone,
                 call_to_action=campaign.call_to_action,
                 unsubscribe_url=unsubscribe_url,
@@ -777,7 +764,7 @@ def dashboard_generate_drafts(
 
             draft = EmailDraft(
                 contact_id=contact.id,
-                campaign_id=campaign.id,
+                campaign_id=campaign_id,
                 cadence_step_id=step.id,
                 step_number=step.step_number,
                 send_day=step.send_day,
@@ -793,7 +780,7 @@ def dashboard_generate_drafts(
     session.commit()
 
     return RedirectResponse(
-        url=f"/dashboard?message=Created {created} drafts. Skipped {skipped} existing drafts.",
+        url=f"/dashboard?message=Created {created} drafts for {campaign.name}. Skipped {skipped} existing drafts.",
         status_code=303,
     )
 
@@ -852,6 +839,41 @@ def dashboard_approve_draft(
 
     return RedirectResponse(
         url="/dashboard?message=Draft approved.",
+        status_code=303,
+    )
+
+
+@app.post("/dashboard/drafts/approve-campaign")
+def dashboard_approve_campaign(
+    request: Request,
+    campaign_id: int = Form(...),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = session.get(Campaign, campaign_id)
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found.")
+
+    drafts = session.exec(
+        select(EmailDraft).where(
+            EmailDraft.campaign_id == campaign_id,
+            EmailDraft.sent == False,
+        )
+    ).all()
+
+    approved_count = 0
+
+    for draft in drafts:
+        draft.approved = True
+        session.add(draft)
+        approved_count += 1
+
+    session.commit()
+
+    return RedirectResponse(
+        url=f"/dashboard?message=Approved {approved_count} drafts for {campaign.name}.",
         status_code=303,
     )
 
@@ -933,7 +955,7 @@ def dashboard_send_draft(
 
     if DEMO_MODE:
         return RedirectResponse(
-            url="/dashboard?message=Demo mode is on. Email was previewed in PowerShell but not sent.",
+            url="/dashboard?message=Demo mode is on. Email was previewed in logs but not sent.",
             status_code=303,
         )
 
@@ -1029,7 +1051,7 @@ def dashboard_send_day(
         message = f"Sent {sent_count} emails for Day {send_day}. Skipped {skipped_count}."
 
     if errors:
-        message += f" Errors: {len(errors)}. Check PowerShell logs."
+        message += f" Errors: {len(errors)}. Check logs."
 
     return RedirectResponse(
         url=f"/dashboard?message={message}",
@@ -1074,7 +1096,7 @@ def dashboard_unsubscribe_contact(
 
 
 # ------------------------------------------------------------
-# API Endpoints
+# Basic API Endpoints
 # ------------------------------------------------------------
 
 @app.post("/campaigns")
@@ -1082,9 +1104,6 @@ def create_campaign(campaign: Campaign, session: Session = Depends(get_session))
     session.add(campaign)
     session.commit()
     session.refresh(campaign)
-
-    create_default_cadence_steps(campaign.id, session)
-
     return campaign
 
 
@@ -1093,72 +1112,14 @@ def list_campaigns(session: Session = Depends(get_session)):
     return session.exec(select(Campaign)).all()
 
 
-@app.get("/cadence-steps", response_model=List[CadenceStep])
-def list_cadence_steps(session: Session = Depends(get_session)):
-    return session.exec(select(CadenceStep)).all()
-
-
-@app.post("/contacts/upload")
-async def upload_contacts(
-    file: UploadFile = File(...),
-    session: Session = Depends(get_session),
-):
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Please upload a CSV file.")
-
-    df = pd.read_csv(file.file)
-
-    required_columns = {"first_name", "email"}
-    missing = required_columns - set(df.columns)
-
-    if missing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Missing required columns: {missing}",
-        )
-
-    imported = 0
-    skipped = 0
-
-    for _, row in df.iterrows():
-        email = str(row.get("email", "")).strip().lower()
-
-        if not email or "@" not in email:
-            skipped += 1
-            continue
-
-        existing = session.exec(
-            select(Contact).where(Contact.email == email)
-        ).first()
-
-        if existing:
-            skipped += 1
-            continue
-
-        contact = Contact(
-            first_name=str(row.get("first_name", "")).strip(),
-            last_name=str(row.get("last_name", "")).strip() if "last_name" in df.columns else None,
-            email=email,
-            company=str(row.get("company", "")).strip() if "company" in df.columns else None,
-            industry=str(row.get("industry", "")).strip() if "industry" in df.columns else None,
-            role=str(row.get("role", "")).strip() if "role" in df.columns else None,
-            website=str(row.get("website", "")).strip() if "website" in df.columns else None,
-        )
-
-        session.add(contact)
-        imported += 1
-
-    session.commit()
-
-    return {
-        "imported": imported,
-        "skipped": skipped,
-    }
-
-
 @app.get("/contacts", response_model=List[Contact])
 def list_contacts(session: Session = Depends(get_session)):
     return session.exec(select(Contact)).all()
+
+
+@app.get("/cadence-steps", response_model=List[CadenceStep])
+def list_cadence_steps(session: Session = Depends(get_session)):
+    return session.exec(select(CadenceStep)).all()
 
 
 @app.post("/suppressions")
