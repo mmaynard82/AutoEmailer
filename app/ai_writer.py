@@ -17,6 +17,48 @@ else:
     client = None
 
 
+FREE_EMAIL_DOMAINS = {
+    "gmail.com",
+    "yahoo.com",
+    "hotmail.com",
+    "outlook.com",
+    "aol.com",
+    "icloud.com",
+    "msn.com",
+    "live.com",
+    "comcast.net",
+    "protonmail.com",
+    "proton.me",
+    "mail.com",
+    "me.com",
+    "mac.com",
+}
+
+
+def infer_website_from_email(email: str) -> str:
+    """
+    If the contact has no website, infer a likely website from their business email domain.
+    Skips common personal/free email domains.
+    """
+    email = (email or "").strip().lower()
+
+    if "@" not in email:
+        return ""
+
+    domain = email.split("@")[-1].strip()
+
+    if not domain:
+        return ""
+
+    if domain in FREE_EMAIL_DOMAINS:
+        return ""
+
+    if "." not in domain:
+        return ""
+
+    return f"https://{domain}"
+
+
 def normalize_website_url(website: str) -> str:
     """
     Makes sure the website has http:// or https://.
@@ -91,7 +133,6 @@ def fetch_company_website_text(website: str) -> str:
         ]):
             tag.decompose()
 
-        # Prefer visible page text.
         page_text = soup.get_text(separator=" ", strip=True)
 
         return clean_website_text(page_text)
@@ -105,12 +146,18 @@ def build_fallback_personal_line(
     company: str,
     industry: str,
 ) -> str:
-    company_display = company or "your team"
-    industry_display = industry or "your industry"
+    company_display = company.strip() if company and company.strip() else ""
+    industry_display = industry.strip() if industry and industry.strip() else "small business"
+
+    if company_display:
+        return (
+            f"For a {industry_display} business like {company_display}, "
+            f"consistent CRM follow-up can make it easier to manage leads, clients, and missed opportunities."
+        )
 
     return (
-        f"For a {industry_display} business like {company_display}, "
-        f"consistent CRM follow-up can make it easier to manage leads, clients, and missed opportunities."
+        f"For a {industry_display} business, consistent CRM follow-up can make it easier "
+        f"to manage leads, clients, and missed opportunities."
     )
 
 
@@ -120,6 +167,7 @@ def generate_personal_line(
     industry: str,
     role: str,
     website: str = "",
+    email: str = "",
     audience: str = "",
     tone: str = "friendly, consultative, concise",
 ) -> str:
@@ -127,14 +175,15 @@ def generate_personal_line(
     Generates one company-specific personalization line.
 
     Best case:
-    - Uses public website text to write a specific but safe opener.
+    - Uses the website field to fetch public homepage text.
+    - If website is blank, infers the site from the business email domain.
 
     Fallback:
     - Uses company/industry only.
     """
 
-    company_display = company or "your team"
-    industry_display = industry or "your industry"
+    company_display = company.strip() if company and company.strip() else ""
+    industry_display = industry.strip() if industry and industry.strip() else "small business"
 
     fallback_line = build_fallback_personal_line(
         company=company_display,
@@ -144,7 +193,8 @@ def generate_personal_line(
     if client is None:
         return fallback_line
 
-    website_text = fetch_company_website_text(website)
+    website_to_use = website.strip() if website and website.strip() else infer_website_from_email(email)
+    website_text = fetch_company_website_text(website_to_use)
 
     if website_text:
         prompt = f"""
@@ -156,6 +206,7 @@ Rules:
 - Write only one sentence.
 - Keep it under 35 words.
 - Use only information supported by the website text.
+- If the website text is mostly navigation, contact information, legal text, generic slogans, or does not contain enough useful company-specific information, write a general industry-specific CRM sentence instead.
 - Do not make up specific facts.
 - Do not mention trends, news, research, awards, growth, funding, hiring, or anything you cannot verify.
 - Do not say "I was impressed by".
@@ -171,7 +222,8 @@ First name: {first_name}
 Company: {company_display}
 Industry: {industry_display}
 Role: {role}
-Website: {website}
+Email: {email}
+Website used: {website_to_use}
 Audience: {audience}
 Tone: {tone}
 
@@ -191,9 +243,9 @@ Rules:
 - Do not make up specific facts.
 - Do not mention trends, news, research, awards, growth, funding, hiring, or anything you cannot verify.
 - Do not say "I was impressed by".
-- If the website text does not contain enough useful company-specific information, write a general industry-specific CRM sentence instead.
 - Do not pretend to know the company personally.
-- Mention the company or industry if appropriate.
+- If company name is missing, do not say "your team."
+- Mention the company or industry only if available.
 - No markdown.
 - No quotes.
 
@@ -202,7 +254,8 @@ First name: {first_name}
 Company: {company_display}
 Industry: {industry_display}
 Role: {role}
-Website: {website}
+Email: {email}
+Website attempted: {website_to_use}
 Audience: {audience}
 Tone: {tone}
 
@@ -246,6 +299,7 @@ def render_template_email(
     industry: str,
     role: str,
     website: str,
+    email: str,
     offer: str,
     audience: str,
     tone: str,
@@ -259,8 +313,8 @@ def render_template_email(
     Renders a mostly fixed email template and inserts one AI-generated company-specific personal line.
     """
 
-    company_display = company or "your team"
-    first_name_display = first_name or "there"
+    company_display = company.strip() if company and company.strip() else ""
+    first_name_display = first_name.strip() if first_name and first_name.strip() else "there"
 
     personal_line = generate_personal_line(
         first_name=first_name_display,
@@ -268,26 +322,80 @@ def render_template_email(
         industry=industry or "",
         role=role or "",
         website=website or "",
+        email=email or "",
         audience=audience or "",
         tone=tone or "",
     )
 
     replacements = {
         "{{ first_name }}": first_name_display,
+        "{{first_name}}": first_name_display,
+        "{first_name}": first_name_display,
+
         "{{ company }}": company_display,
+        "{{company}}": company_display,
+        "{company}": company_display,
+
         "{{ industry }}": industry or "",
+        "{{industry}}": industry or "",
+        "{industry}": industry or "",
+
         "{{ role }}": role or "",
+        "{{role}}": role or "",
+        "{role}": role or "",
+
         "{{ website }}": website or "",
+        "{{website}}": website or "",
+        "{website}": website or "",
+
+        "{{ email }}": email or "",
+        "{{email}}": email or "",
+        "{email}": email or "",
+
         "{{ offer }}": offer or "",
+        "{{offer}}": offer or "",
+        "{offer}": offer or "",
+
         "{{ audience }}": audience or "",
+        "{{audience}}": audience or "",
+        "{audience}": audience or "",
+
         "{{ tone }}": tone or "",
+        "{{tone}}": tone or "",
+        "{tone}": tone or "",
+
         "{{ call_to_action }}": call_to_action or "",
+        "{{call_to_action}}": call_to_action or "",
+        "{call_to_action}": call_to_action or "",
+        "{call to action}": call_to_action or "",
+
         "{{ personal_line }}": personal_line,
+        "{{personal_line}}": personal_line,
+        "{personal_line}": personal_line,
+        "{personal line}": personal_line,
+
         "{{ company_blurb }}": personal_line,
+        "{{company_blurb}}": personal_line,
+        "{company_blurb}": personal_line,
+        "{company blurb}": personal_line,
+
         "{{ unsubscribe_url }}": unsubscribe_url or "",
+        "{{unsubscribe_url}}": unsubscribe_url or "",
+        "{unsubscribe_url}": unsubscribe_url or "",
+        "{unsubscribe url}": unsubscribe_url or "",
+
         "{{ cadence_step_name }}": cadence_step_name or "",
+        "{{cadence_step_name}}": cadence_step_name or "",
+        "{cadence_step_name}": cadence_step_name or "",
+
         "{{ cadence_step_purpose }}": cadence_step_purpose or "",
+        "{{cadence_step_purpose}}": cadence_step_purpose or "",
+        "{cadence_step_purpose}": cadence_step_purpose or "",
+
         "{{ step_number }}": str(step_number),
+        "{{step_number}}": str(step_number),
+        "{step_number}": str(step_number),
+        "{step number}": str(step_number),
     }
 
     subject = template_subject or "Quick question for {{ company }}"

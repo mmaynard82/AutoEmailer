@@ -909,6 +909,7 @@ def generate_campaign_drafts(
                 industry=contact.industry or "",
                 role=contact.role or "",
                 website=contact.website or "",
+                email=contact.email or "",
                 offer=campaign.offer,
                 audience=campaign.audience or "small businesses",
                 tone=step.tone or "friendly, consultative, concise",
