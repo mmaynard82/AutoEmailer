@@ -195,3 +195,58 @@ def export_contact_to_hubspot(
         "error": create_response.text,
         "status_code": create_response.status_code,
     }
+def update_hubspot_contact_dnc_by_email(email: str):
+    """
+    Updates a HubSpot contact to a DNC / do-not-contact status by email.
+
+    Uses environment variables:
+    HUBSPOT_DNC_PROPERTY
+    HUBSPOT_DNC_VALUE
+    """
+
+    dnc_property = os.getenv("HUBSPOT_DNC_PROPERTY", "hs_lead_status")
+    dnc_value = os.getenv("HUBSPOT_DNC_VALUE", "DNC")
+
+    if not email:
+        return {
+            "status": "skipped",
+            "reason": "Missing email",
+        }
+
+    url = f"{BASE_URL}/crm/v3/objects/contacts/{email}"
+
+    params = {
+        "idProperty": "email",
+    }
+
+    payload = {
+        "properties": {
+            dnc_property: dnc_value,
+        }
+    }
+
+    response = requests.patch(
+        url,
+        headers=hubspot_headers(),
+        params=params,
+        json=payload,
+        timeout=20,
+    )
+
+    if response.status_code in [200, 201]:
+        return {
+            "status": "updated",
+            "response": response.json(),
+        }
+
+    if response.status_code == 404:
+        return {
+            "status": "not_found",
+            "error": response.text,
+        }
+
+    return {
+        "status": "failed",
+        "status_code": response.status_code,
+        "error": response.text,
+    }

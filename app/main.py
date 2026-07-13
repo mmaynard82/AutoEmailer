@@ -15,7 +15,11 @@ from app.database import create_db_and_tables, get_session
 from app.models import Contact, Campaign, CadenceStep, EmailDraft, Suppression
 from app.ai_writer import render_template_email
 from app.ses_sender import send_email_via_ses
-from app.hubspot_client import get_hubspot_contacts, export_contact_to_hubspot
+from app.hubspot_client import (
+    get_hubspot_contacts,
+    export_contact_to_hubspot,
+    update_hubspot_contact_dnc_by_email,
+)
 
 
 load_dotenv()
@@ -58,6 +62,33 @@ def is_logged_in(request: Request) -> bool:
 def require_dashboard_login(request: Request):
     if not is_logged_in(request):
         raise HTTPException(status_code=303, headers={"Location": "/login"})
+
+
+# ------------------------------------------------------------
+# HubSpot Helper
+# ------------------------------------------------------------
+
+def safe_update_hubspot_dnc(email: str):
+    """
+    Updates HubSpot contact status to DNC, but does not break unsubscribe
+    if HubSpot is unavailable, missing the contact, or misconfigured.
+    """
+    if not email:
+        return {
+            "status": "skipped",
+            "reason": "Missing email",
+        }
+
+    try:
+        result = update_hubspot_contact_dnc_by_email(email)
+        print(f"HubSpot DNC update result for {email}: {result}")
+        return result
+    except Exception as e:
+        print(f"HubSpot DNC update failed for {email}: {e}")
+        return {
+            "status": "failed",
+            "error": str(e),
+        }
 
 
 # ------------------------------------------------------------
@@ -210,6 +241,8 @@ def unsubscribe_via_link(
 
     session.add(contact)
     session.commit()
+
+    safe_update_hubspot_dnc(contact.email)
 
     return HTMLResponse(
         content=f"""
@@ -686,8 +719,10 @@ def dashboard_unsubscribe_contact(
     session.add(contact)
     session.commit()
 
+    safe_update_hubspot_dnc(contact.email)
+
     return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign_id}?message=Contact unsubscribed and suppressed.",
+        url=f"/dashboard/campaigns/{campaign_id}?message=Contact unsubscribed, suppressed, and HubSpot DNC update attempted.",
         status_code=303,
     )
 
@@ -920,7 +955,7 @@ def generate_campaign_drafts(
                 step_number=step.step_number,
             )
 
-            unsubscribe_line = f"\n\nIf this is not relevant, you can unsubscribe here: {unsubscribe_url}"
+            unsubscribe_line = f"\n\nIf this is not relevant, you can stop future emails here: {unsubscribe_url}"
 
             draft = EmailDraft(
                 contact_id=contact.id,
@@ -1306,6 +1341,8 @@ def add_suppression(
     session.add(suppression)
     session.commit()
     session.refresh(suppression)
+
+    safe_update_hubspot_dnc(suppression.email)
 
     return suppression
 
