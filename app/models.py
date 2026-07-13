@@ -29,8 +29,22 @@ class Campaign(SQLModel, table=True):
     name: str
     offer: str
     audience: str = "small businesses"
-    tone: str = "professional, helpful, concise"
-    call_to_action: str = "Would you be open to a brief conversation?"
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class CadenceStep(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    campaign_id: int = Field(index=True)
+
+    step_number: int
+    send_day: int
+    name: str
+    purpose: str
+
+    tone: str = "friendly, consultative, concise"
+    call_to_action: str = "Would you be open to a quick conversation?"
 
     template_subject: Optional[str] = "Quick question for {{ company }}"
     template_body: Optional[str] = """Hi {{ first_name }},
@@ -45,19 +59,6 @@ I’m reaching out because we help {{ audience }} improve CRM follow-up, sales v
 
 Best,
 Evolution CRM"""
-
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-class CadenceStep(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-
-    campaign_id: int = Field(index=True)
-
-    step_number: int
-    send_day: int
-    name: str
-    purpose: str
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

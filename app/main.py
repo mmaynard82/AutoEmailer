@@ -142,11 +142,12 @@ def home(request: Request):
         "next_steps": [
             "Login",
             "Create campaign",
-            "Add one cadence step",
-            "Upload contacts to that campaign",
-            "Generate drafts for that campaign only",
-            "Approve drafts in bulk",
-            "Use dry run before real sending",
+            "Open campaign workspace",
+            "Add/edit email steps",
+            "Upload contacts to a campaign",
+            "Generate drafts for all steps or one selected step",
+            "Approve drafts",
+            "Preview before sending",
         ],
     }
 
@@ -230,15 +231,6 @@ def unsubscribe_via_link(
 # Helpers
 # ------------------------------------------------------------
 
-def get_available_send_days(cadence_steps: List[CadenceStep]):
-    days = sorted(list({step.send_day for step in cadence_steps}))
-
-    if not days:
-        days = []
-
-    return days
-
-
 def safe_send_email(to_email: str, subject: str, body: str) -> dict:
     if DEMO_MODE:
         print("\nDEMO MODE - Real email blocked")
@@ -264,72 +256,40 @@ def safe_send_email(to_email: str, subject: str, body: str) -> dict:
     }
 
 
-# ------------------------------------------------------------
-# Dashboard
-# ------------------------------------------------------------
+def get_campaign_or_404(campaign_id: int, session: Session) -> Campaign:
+    campaign = session.get(Campaign, campaign_id)
 
-@app.get("/dashboard")
-def dashboard(
-    request: Request,
-    message: str = "",
-    session: Session = Depends(get_session),
-):
-    require_dashboard_login(request)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    campaigns = session.exec(select(Campaign)).all()
-    contacts = session.exec(select(Contact)).all()
-    cadence_steps = session.exec(select(CadenceStep)).all()
-    drafts = session.exec(select(EmailDraft)).all()
-    suppressions = session.exec(select(Suppression)).all()
+    return campaign
 
-    available_send_days = get_available_send_days(cadence_steps)
 
-    total_contacts = len(contacts)
-    suppressed_contacts = len([c for c in contacts if c.suppressed or c.unsubscribed])
-    active_contacts = total_contacts - suppressed_contacts
+def build_campaign_context(campaign_id: int, session: Session):
+    campaign = get_campaign_or_404(campaign_id, session)
 
-    analytics = {
-        "total_campaigns": len(campaigns),
-        "total_contacts": total_contacts,
-        "active_contacts": active_contacts,
-        "suppressed_contacts": suppressed_contacts,
-        "total_drafts": len(drafts),
-        "approved_drafts": len([d for d in drafts if d.approved]),
-        "sent_drafts": len([d for d in drafts if d.sent]),
-        "unsent_drafts": len([d for d in drafts if not d.sent]),
-        "unapproved_drafts": len([d for d in drafts if not d.approved and not d.sent]),
-    }
+    contacts = session.exec(
+        select(Contact).where(Contact.campaign_id == campaign_id)
+    ).all()
 
-    campaign_stats = []
+    steps = session.exec(
+        select(CadenceStep).where(CadenceStep.campaign_id == campaign_id)
+    ).all()
 
-    for campaign in campaigns:
-        campaign_contacts = [c for c in contacts if c.campaign_id == campaign.id]
-        campaign_drafts = [d for d in drafts if d.campaign_id == campaign.id]
-        campaign_steps = [s for s in cadence_steps if s.campaign_id == campaign.id]
+    drafts = session.exec(
+        select(EmailDraft).where(EmailDraft.campaign_id == campaign_id)
+    ).all()
 
-        campaign_stats.append({
-            "id": campaign.id,
-            "name": campaign.name,
-            "audience": campaign.audience,
-            "contacts": len(campaign_contacts),
-            "steps": len(campaign_steps),
-            "drafts": len(campaign_drafts),
-            "approved": len([d for d in campaign_drafts if d.approved]),
-            "sent": len([d for d in campaign_drafts if d.sent]),
-            "unsent": len([d for d in campaign_drafts if not d.sent]),
-            "unapproved": len([d for d in campaign_drafts if not d.approved and not d.sent]),
-        })
+    steps = sorted(steps, key=lambda s: (s.step_number, s.send_day))
 
     draft_rows = []
 
     for draft in drafts:
         contact = session.get(Contact, draft.contact_id)
-        campaign = session.get(Campaign, draft.campaign_id)
         step = session.get(CadenceStep, draft.cadence_step_id) if draft.cadence_step_id else None
 
         draft_rows.append({
             "id": draft.id,
-            "campaign": campaign.name if campaign else "",
             "campaign_id": draft.campaign_id,
             "step_name": step.name if step else "",
             "step_number": draft.step_number,
@@ -347,11 +307,70 @@ def dashboard(
     draft_rows = sorted(
         draft_rows,
         key=lambda x: (
-            x["campaign"] or "",
             x["step_number"] or 0,
             x["contact_name"] or "",
         ),
     )
+
+    stats = {
+        "contacts": len(contacts),
+        "active_contacts": len([c for c in contacts if not c.suppressed and not c.unsubscribed]),
+        "suppressed_contacts": len([c for c in contacts if c.suppressed or c.unsubscribed]),
+        "steps": len(steps),
+        "drafts": len(drafts),
+        "approved": len([d for d in drafts if d.approved]),
+        "sent": len([d for d in drafts if d.sent]),
+        "unapproved": len([d for d in drafts if not d.approved and not d.sent]),
+    }
+
+    return campaign, contacts, steps, draft_rows, stats
+
+
+# ------------------------------------------------------------
+# Dashboard: Campaign List
+# ------------------------------------------------------------
+
+@app.get("/dashboard")
+def dashboard(
+    request: Request,
+    message: str = "",
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaigns = session.exec(select(Campaign)).all()
+    contacts = session.exec(select(Contact)).all()
+    steps = session.exec(select(CadenceStep)).all()
+    drafts = session.exec(select(EmailDraft)).all()
+
+    campaign_rows = []
+
+    for campaign in campaigns:
+        campaign_contacts = [c for c in contacts if c.campaign_id == campaign.id]
+        campaign_steps = [s for s in steps if s.campaign_id == campaign.id]
+        campaign_drafts = [d for d in drafts if d.campaign_id == campaign.id]
+
+        campaign_rows.append({
+            "id": campaign.id,
+            "name": campaign.name,
+            "audience": campaign.audience,
+            "offer": campaign.offer,
+            "contacts": len(campaign_contacts),
+            "steps": len(campaign_steps),
+            "drafts": len(campaign_drafts),
+            "approved": len([d for d in campaign_drafts if d.approved]),
+            "sent": len([d for d in campaign_drafts if d.sent]),
+            "unapproved": len([d for d in campaign_drafts if not d.approved and not d.sent]),
+        })
+
+    analytics = {
+        "total_campaigns": len(campaigns),
+        "total_contacts": len(contacts),
+        "total_steps": len(steps),
+        "total_drafts": len(drafts),
+        "approved_drafts": len([d for d in drafts if d.approved]),
+        "sent_drafts": len([d for d in drafts if d.sent]),
+    }
 
     return templates.TemplateResponse(
         request=request,
@@ -359,187 +378,14 @@ def dashboard(
         context={
             "message": message,
             "demo_mode": DEMO_MODE,
-            "campaigns": campaigns,
-            "contacts": contacts,
-            "cadence_steps": cadence_steps,
-            "drafts": draft_rows,
-            "suppressions": suppressions,
-            "available_send_days": available_send_days,
+            "campaigns": campaign_rows,
             "analytics": analytics,
-            "campaign_stats": campaign_stats,
-        },
-    )
-
-
-@app.get("/dashboard/drafts/{draft_id}/edit")
-def dashboard_edit_draft_page(
-    draft_id: int,
-    request: Request,
-    session: Session = Depends(get_session),
-):
-    require_dashboard_login(request)
-
-    draft = session.get(EmailDraft, draft_id)
-
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found.")
-
-    contact = session.get(Contact, draft.contact_id)
-    campaign = session.get(Campaign, draft.campaign_id)
-    step = session.get(CadenceStep, draft.cadence_step_id) if draft.cadence_step_id else None
-
-    return templates.TemplateResponse(
-        request=request,
-        name="edit_draft.html",
-        context={
-            "draft": draft,
-            "contact": contact,
-            "campaign": campaign,
-            "step": step,
-            "demo_mode": DEMO_MODE,
         },
     )
 
 
 # ------------------------------------------------------------
-# HubSpot Actions
-# ------------------------------------------------------------
-
-@app.post("/dashboard/hubspot/import")
-def dashboard_import_hubspot_contacts(
-    request: Request,
-    campaign_id: int = Form(...),
-    limit: int = Form(100),
-    session: Session = Depends(get_session),
-):
-    require_dashboard_login(request)
-
-    campaign = session.get(Campaign, campaign_id)
-
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
-
-    try:
-        hubspot_data = get_hubspot_contacts(limit=limit)
-    except Exception as e:
-        return RedirectResponse(
-            url=f"/dashboard?message=HubSpot import failed: {str(e)}",
-            status_code=303,
-        )
-
-    imported = 0
-    skipped = 0
-
-    for item in hubspot_data.get("results", []):
-        props = item.get("properties", {})
-
-        email = (props.get("email") or "").strip().lower()
-
-        if not email or "@" not in email:
-            skipped += 1
-            continue
-
-        existing = session.exec(
-            select(Contact).where(
-                Contact.email == email,
-                Contact.campaign_id == campaign_id,
-            )
-        ).first()
-
-        if existing:
-            skipped += 1
-            continue
-
-        contact = Contact(
-            campaign_id=campaign_id,
-            first_name=(props.get("firstname") or "").strip() or "there",
-            last_name=(props.get("lastname") or "").strip() or None,
-            email=email,
-            company=(props.get("company") or "").strip() or None,
-            industry="HubSpot Import",
-            role=(props.get("jobtitle") or "").strip() or None,
-            website=(props.get("website") or "").strip() or None,
-        )
-
-        session.add(contact)
-        imported += 1
-
-    session.commit()
-
-    return RedirectResponse(
-        url=f"/dashboard?message=Imported {imported} HubSpot contacts into {campaign.name}. Skipped {skipped}.",
-        status_code=303,
-    )
-
-
-@app.post("/dashboard/hubspot/export")
-def dashboard_export_hubspot_contacts(
-    request: Request,
-    campaign_id: int = Form(...),
-    limit: int = Form(100),
-    session: Session = Depends(get_session),
-):
-    require_dashboard_login(request)
-
-    campaign = session.get(Campaign, campaign_id)
-
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
-
-    contacts = session.exec(
-        select(Contact).where(
-            Contact.campaign_id == campaign_id,
-            Contact.unsubscribed == False,
-            Contact.suppressed == False,
-        )
-    ).all()
-
-    contacts = contacts[:limit]
-
-    created = 0
-    updated = 0
-    skipped = 0
-    failed = 0
-
-    for contact in contacts:
-        if not contact.email or "@" not in contact.email:
-            skipped += 1
-            continue
-
-        try:
-            result = export_contact_to_hubspot(
-                email=contact.email,
-                first_name=contact.first_name or "",
-                last_name=contact.last_name or "",
-                company=contact.company or "",
-                jobtitle=contact.role or "",
-                website=contact.website or "",
-            )
-
-            if result["status"] == "created":
-                created += 1
-            elif result["status"] == "updated":
-                updated += 1
-            else:
-                failed += 1
-                print(f"HubSpot export failed for {contact.email}: {result}")
-
-        except Exception as e:
-            failed += 1
-            print(f"HubSpot export exception for {contact.email}: {e}")
-
-    return RedirectResponse(
-        url=(
-            f"/dashboard?message="
-            f"HubSpot export for {campaign.name} complete. Created {created}, updated {updated}, "
-            f"skipped {skipped}, failed {failed}."
-        ),
-        status_code=303,
-    )
-
-
-# ------------------------------------------------------------
-# Campaigns / Contacts / Cadence Steps
+# Campaign Routes
 # ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns")
@@ -548,10 +394,6 @@ def dashboard_create_campaign(
     name: str = Form(...),
     offer: str = Form(...),
     audience: str = Form("small businesses"),
-    tone: str = Form("friendly, consultative, concise"),
-    call_to_action: str = Form("Would you be open to a quick conversation?"),
-    template_subject: str = Form("Quick question for {{ company }}"),
-    template_body: str = Form(...),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
@@ -560,68 +402,200 @@ def dashboard_create_campaign(
         name=name,
         offer=offer,
         audience=audience or "small businesses",
+    )
+
+    session.add(campaign)
+    session.commit()
+    session.refresh(campaign)
+
+    return RedirectResponse(
+        url=f"/dashboard/campaigns/{campaign.id}?message=Campaign created. Add an email step next.",
+        status_code=303,
+    )
+
+
+@app.get("/dashboard/campaigns/{campaign_id}")
+def campaign_detail(
+    campaign_id: int,
+    request: Request,
+    message: str = "",
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign, contacts, steps, draft_rows, stats = build_campaign_context(campaign_id, session)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="campaign_detail.html",
+        context={
+            "message": message,
+            "demo_mode": DEMO_MODE,
+            "campaign": campaign,
+            "contacts": contacts,
+            "steps": steps,
+            "drafts": draft_rows,
+            "stats": stats,
+        },
+    )
+
+
+@app.post("/dashboard/campaigns/{campaign_id}/edit")
+def edit_campaign(
+    campaign_id: int,
+    request: Request,
+    name: str = Form(...),
+    audience: str = Form("small businesses"),
+    offer: str = Form(...),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404(campaign_id, session)
+
+    campaign.name = name
+    campaign.audience = audience or "small businesses"
+    campaign.offer = offer
+
+    session.add(campaign)
+    session.commit()
+
+    return RedirectResponse(
+        url=f"/dashboard/campaigns/{campaign_id}?message=Campaign settings updated.",
+        status_code=303,
+    )
+
+
+# ------------------------------------------------------------
+# Email Step Routes
+# ------------------------------------------------------------
+
+@app.post("/dashboard/campaigns/{campaign_id}/steps")
+def add_campaign_step(
+    campaign_id: int,
+    request: Request,
+    step_number: int = Form(...),
+    send_day: int = Form(...),
+    name: str = Form(...),
+    purpose: str = Form(...),
+    tone: str = Form("friendly, consultative, concise"),
+    call_to_action: str = Form("Would you be open to a quick conversation?"),
+    template_subject: str = Form("Quick question for {{ company }}"),
+    template_body: str = Form(...),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404(campaign_id, session)
+
+    step = CadenceStep(
+        campaign_id=campaign.id,
+        step_number=step_number,
+        send_day=send_day,
+        name=name,
+        purpose=purpose,
         tone=tone,
         call_to_action=call_to_action,
         template_subject=template_subject,
         template_body=template_body,
     )
 
-    session.add(campaign)
+    session.add(step)
     session.commit()
 
     return RedirectResponse(
-        url="/dashboard?message=Campaign created. Now add one email step.",
+        url=f"/dashboard/campaigns/{campaign_id}?message=Email step added.",
         status_code=303,
     )
 
 
-@app.post("/dashboard/cadence-steps")
-def dashboard_create_cadence_step(
+@app.post("/dashboard/steps/{step_id}/edit")
+def edit_campaign_step(
+    step_id: int,
     request: Request,
-    campaign_id: int = Form(...),
     step_number: int = Form(...),
     send_day: int = Form(...),
     name: str = Form(...),
     purpose: str = Form(...),
+    tone: str = Form("friendly, consultative, concise"),
+    call_to_action: str = Form("Would you be open to a quick conversation?"),
+    template_subject: str = Form("Quick question for {{ company }}"),
+    template_body: str = Form(...),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
 
-    campaign = session.get(Campaign, campaign_id)
+    step = session.get(CadenceStep, step_id)
 
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
+    if not step:
+        raise HTTPException(status_code=404, detail="Email step not found.")
 
-    step = CadenceStep(
-        campaign_id=campaign_id,
-        step_number=step_number,
-        send_day=send_day,
-        name=name,
-        purpose=purpose,
-    )
+    step.step_number = step_number
+    step.send_day = send_day
+    step.name = name
+    step.purpose = purpose
+    step.tone = tone
+    step.call_to_action = call_to_action
+    step.template_subject = template_subject
+    step.template_body = template_body
 
     session.add(step)
     session.commit()
 
     return RedirectResponse(
-        url=f"/dashboard?message=Added one email step to {campaign.name}.",
+        url=f"/dashboard/campaigns/{step.campaign_id}?message=Email step updated. Existing drafts are not changed automatically.",
         status_code=303,
     )
 
 
-@app.post("/dashboard/contacts/upload")
-async def dashboard_upload_contacts(
+@app.post("/dashboard/steps/{step_id}/delete")
+def delete_campaign_step(
+    step_id: int,
     request: Request,
-    campaign_id: int = Form(...),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    step = session.get(CadenceStep, step_id)
+
+    if not step:
+        raise HTTPException(status_code=404, detail="Email step not found.")
+
+    campaign_id = step.campaign_id
+
+    existing_drafts = session.exec(
+        select(EmailDraft).where(EmailDraft.cadence_step_id == step_id)
+    ).all()
+
+    if existing_drafts:
+        return RedirectResponse(
+            url=f"/dashboard/campaigns/{campaign_id}?message=Cannot delete this step because drafts already exist for it.",
+            status_code=303,
+        )
+
+    session.delete(step)
+    session.commit()
+
+    return RedirectResponse(
+        url=f"/dashboard/campaigns/{campaign_id}?message=Email step deleted.",
+        status_code=303,
+    )
+
+
+# ------------------------------------------------------------
+# Contact Routes
+# ------------------------------------------------------------
+
+@app.post("/dashboard/campaigns/{campaign_id}/contacts/upload")
+async def upload_campaign_contacts(
+    campaign_id: int,
+    request: Request,
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
 
-    campaign = session.get(Campaign, campaign_id)
-
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
+    campaign = get_campaign_or_404(campaign_id, session)
 
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a CSV file.")
@@ -675,27 +649,127 @@ async def dashboard_upload_contacts(
     session.commit()
 
     return RedirectResponse(
-        url=f"/dashboard?message=Imported {imported} contacts into {campaign.name}. Skipped {skipped}.",
+        url=f"/dashboard/campaigns/{campaign_id}?message=Imported {imported} contacts into {campaign.name}. Skipped {skipped}.",
+        status_code=303,
+    )
+
+
+@app.post("/dashboard/contacts/{contact_id}/unsubscribe")
+def dashboard_unsubscribe_contact(
+    request: Request,
+    contact_id: int,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    contact = session.get(Contact, contact_id)
+
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found.")
+
+    campaign_id = contact.campaign_id
+
+    contact.unsubscribed = True
+    contact.suppressed = True
+
+    existing = session.exec(
+        select(Suppression).where(Suppression.email == contact.email)
+    ).first()
+
+    if not existing:
+        suppression = Suppression(
+            email=contact.email,
+            reason="manual unsubscribe",
+        )
+        session.add(suppression)
+
+    session.add(contact)
+    session.commit()
+
+    return RedirectResponse(
+        url=f"/dashboard/campaigns/{campaign_id}?message=Contact unsubscribed and suppressed.",
         status_code=303,
     )
 
 
 # ------------------------------------------------------------
-# Draft Generation / Approval / Sending
+# HubSpot Routes
 # ------------------------------------------------------------
 
-@app.post("/dashboard/drafts/generate")
-def dashboard_generate_drafts(
+@app.post("/dashboard/campaigns/{campaign_id}/hubspot/import")
+def import_hubspot_to_campaign(
+    campaign_id: int,
     request: Request,
-    campaign_id: int = Form(...),
+    limit: int = Form(100),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
 
-    campaign = session.get(Campaign, campaign_id)
+    campaign = get_campaign_or_404(campaign_id, session)
 
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
+    try:
+        hubspot_data = get_hubspot_contacts(limit=limit)
+    except Exception as e:
+        return RedirectResponse(
+            url=f"/dashboard/campaigns/{campaign_id}?message=HubSpot import failed: {str(e)}",
+            status_code=303,
+        )
+
+    imported = 0
+    skipped = 0
+
+    for item in hubspot_data.get("results", []):
+        props = item.get("properties", {})
+
+        email = (props.get("email") or "").strip().lower()
+
+        if not email or "@" not in email:
+            skipped += 1
+            continue
+
+        existing = session.exec(
+            select(Contact).where(
+                Contact.email == email,
+                Contact.campaign_id == campaign_id,
+            )
+        ).first()
+
+        if existing:
+            skipped += 1
+            continue
+
+        contact = Contact(
+            campaign_id=campaign_id,
+            first_name=(props.get("firstname") or "").strip() or "there",
+            last_name=(props.get("lastname") or "").strip() or None,
+            email=email,
+            company=(props.get("company") or "").strip() or None,
+            industry="HubSpot Import",
+            role=(props.get("jobtitle") or "").strip() or None,
+            website=(props.get("website") or "").strip() or None,
+        )
+
+        session.add(contact)
+        imported += 1
+
+    session.commit()
+
+    return RedirectResponse(
+        url=f"/dashboard/campaigns/{campaign_id}?message=Imported {imported} HubSpot contacts into {campaign.name}. Skipped {skipped}.",
+        status_code=303,
+    )
+
+
+@app.post("/dashboard/campaigns/{campaign_id}/hubspot/export")
+def export_campaign_to_hubspot(
+    campaign_id: int,
+    request: Request,
+    limit: int = Form(100),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404(campaign_id, session)
 
     contacts = session.exec(
         select(Contact).where(
@@ -705,21 +779,106 @@ def dashboard_generate_drafts(
         )
     ).all()
 
-    cadence_steps = session.exec(
-        select(CadenceStep).where(CadenceStep.campaign_id == campaign_id)
+    contacts = contacts[:limit]
+
+    created = 0
+    updated = 0
+    skipped = 0
+    failed = 0
+
+    for contact in contacts:
+        if not contact.email or "@" not in contact.email:
+            skipped += 1
+            continue
+
+        try:
+            result = export_contact_to_hubspot(
+                email=contact.email,
+                first_name=contact.first_name or "",
+                last_name=contact.last_name or "",
+                company=contact.company or "",
+                jobtitle=contact.role or "",
+                website=contact.website or "",
+            )
+
+            if result["status"] == "created":
+                created += 1
+            elif result["status"] == "updated":
+                updated += 1
+            else:
+                failed += 1
+                print(f"HubSpot export failed for {contact.email}: {result}")
+
+        except Exception as e:
+            failed += 1
+            print(f"HubSpot export exception for {contact.email}: {e}")
+
+    return RedirectResponse(
+        url=(
+            f"/dashboard/campaigns/{campaign_id}?message="
+            f"HubSpot export complete. Created {created}, updated {updated}, skipped {skipped}, failed {failed}."
+        ),
+        status_code=303,
+    )
+
+
+# ------------------------------------------------------------
+# Draft Routes
+# ------------------------------------------------------------
+
+@app.post("/dashboard/campaigns/{campaign_id}/drafts/generate")
+def generate_campaign_drafts(
+    campaign_id: int,
+    request: Request,
+    cadence_step_id: str = Form("all"),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404(campaign_id, session)
+
+    contacts = session.exec(
+        select(Contact).where(
+            Contact.campaign_id == campaign_id,
+            Contact.unsubscribed == False,
+            Contact.suppressed == False,
+        )
     ).all()
 
-    cadence_steps = sorted(cadence_steps, key=lambda step: step.step_number)
+    if cadence_step_id == "all":
+        steps = session.exec(
+            select(CadenceStep).where(CadenceStep.campaign_id == campaign_id)
+        ).all()
+    else:
+        try:
+            selected_step_id = int(cadence_step_id)
+        except ValueError:
+            return RedirectResponse(
+                url=f"/dashboard/campaigns/{campaign_id}?message=Invalid email step selected.",
+                status_code=303,
+            )
+
+        selected_step = session.get(CadenceStep, selected_step_id)
+
+        if not selected_step or selected_step.campaign_id != campaign_id:
+            return RedirectResponse(
+                url=f"/dashboard/campaigns/{campaign_id}?message=Selected email step not found for this campaign.",
+                status_code=303,
+            )
+
+        steps = [selected_step]
+
+    steps = sorted(steps, key=lambda step: step.step_number)
 
     if not contacts:
         return RedirectResponse(
-            url="/dashboard?message=No contacts found for this campaign. Upload contacts to this campaign first.",
+            url=f"/dashboard/campaigns/{campaign_id}?message=No contacts found. Upload contacts to this campaign first.",
             status_code=303,
         )
 
-    if not cadence_steps:
+    if not steps:
         return RedirectResponse(
-            url="/dashboard?message=No email steps found. Add one email step before generating drafts.",
+            url=f"/dashboard/campaigns/{campaign_id}?message=No email steps found. Add an email step first.",
             status_code=303,
         )
 
@@ -727,7 +886,7 @@ def dashboard_generate_drafts(
     skipped = 0
 
     for contact in contacts:
-        for step in cadence_steps:
+        for step in steps:
             existing = session.exec(
                 select(EmailDraft).where(
                     EmailDraft.contact_id == contact.id,
@@ -743,8 +902,8 @@ def dashboard_generate_drafts(
             unsubscribe_url = build_unsubscribe_url(contact)
 
             ai_email = render_template_email(
-                template_subject=campaign.template_subject or "Quick question for {{ company }}",
-                template_body=campaign.template_body or "",
+                template_subject=step.template_subject or "Quick question for {{ company }}",
+                template_body=step.template_body or "",
                 first_name=contact.first_name,
                 company=contact.company or "",
                 industry=contact.industry or "",
@@ -752,8 +911,8 @@ def dashboard_generate_drafts(
                 website=contact.website or "",
                 offer=campaign.offer,
                 audience=campaign.audience or "small businesses",
-                tone=campaign.tone,
-                call_to_action=campaign.call_to_action,
+                tone=step.tone or "friendly, consultative, concise",
+                call_to_action=step.call_to_action or "Would you be open to a quick conversation?",
                 unsubscribe_url=unsubscribe_url,
                 cadence_step_name=step.name,
                 cadence_step_purpose=step.purpose,
@@ -779,9 +938,137 @@ def dashboard_generate_drafts(
 
     session.commit()
 
+    if cadence_step_id == "all":
+        selected_label = "all email steps"
+    else:
+        selected_label = "selected email step only"
+
     return RedirectResponse(
-        url=f"/dashboard?message=Created {created} drafts for {campaign.name}. Skipped {skipped} existing drafts.",
+        url=f"/dashboard/campaigns/{campaign_id}?message=Created {created} drafts for {selected_label}. Skipped {skipped} existing drafts.",
         status_code=303,
+    )
+
+
+@app.post("/dashboard/campaigns/{campaign_id}/drafts/approve-all")
+def approve_all_campaign_drafts(
+    campaign_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404(campaign_id, session)
+
+    drafts = session.exec(
+        select(EmailDraft).where(
+            EmailDraft.campaign_id == campaign_id,
+            EmailDraft.sent == False,
+        )
+    ).all()
+
+    approved_count = 0
+
+    for draft in drafts:
+        draft.approved = True
+        session.add(draft)
+        approved_count += 1
+
+    session.commit()
+
+    return RedirectResponse(
+        url=f"/dashboard/campaigns/{campaign_id}?message=Approved {approved_count} drafts for {campaign.name}.",
+        status_code=303,
+    )
+
+
+@app.post("/dashboard/campaigns/{campaign_id}/drafts/approve-day")
+def approve_campaign_day(
+    campaign_id: int,
+    request: Request,
+    send_day: int = Form(...),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    get_campaign_or_404(campaign_id, session)
+
+    drafts = session.exec(
+        select(EmailDraft).where(
+            EmailDraft.campaign_id == campaign_id,
+            EmailDraft.send_day == send_day,
+            EmailDraft.sent == False,
+        )
+    ).all()
+
+    approved_count = 0
+
+    for draft in drafts:
+        draft.approved = True
+        session.add(draft)
+        approved_count += 1
+
+    session.commit()
+
+    return RedirectResponse(
+        url=f"/dashboard/campaigns/{campaign_id}?message=Approved {approved_count} drafts for Day {send_day}.",
+        status_code=303,
+    )
+
+
+@app.post("/dashboard/drafts/{draft_id}/approve")
+def approve_single_draft(
+    request: Request,
+    draft_id: int,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    draft = session.get(EmailDraft, draft_id)
+
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found.")
+
+    if draft.sent:
+        raise HTTPException(status_code=400, detail="Cannot approve a sent draft.")
+
+    draft.approved = True
+
+    session.add(draft)
+    session.commit()
+
+    return RedirectResponse(
+        url=f"/dashboard/campaigns/{draft.campaign_id}?message=Draft approved.",
+        status_code=303,
+    )
+
+
+@app.get("/dashboard/drafts/{draft_id}/edit")
+def dashboard_edit_draft_page(
+    draft_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    draft = session.get(EmailDraft, draft_id)
+
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found.")
+
+    contact = session.get(Contact, draft.contact_id)
+    campaign = session.get(Campaign, draft.campaign_id)
+    step = session.get(CadenceStep, draft.cadence_step_id) if draft.cadence_step_id else None
+
+    return templates.TemplateResponse(
+        request=request,
+        name="edit_draft.html",
+        context={
+            "draft": draft,
+            "contact": contact,
+            "campaign": campaign,
+            "step": step,
+            "demo_mode": DEMO_MODE,
+        },
     )
 
 
@@ -811,107 +1098,13 @@ def dashboard_save_draft_edit(
     session.commit()
 
     return RedirectResponse(
-        url="/dashboard?message=Draft saved. Re-approval required.",
-        status_code=303,
-    )
-
-
-@app.post("/dashboard/drafts/{draft_id}/approve")
-def dashboard_approve_draft(
-    request: Request,
-    draft_id: int,
-    session: Session = Depends(get_session),
-):
-    require_dashboard_login(request)
-
-    draft = session.get(EmailDraft, draft_id)
-
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found.")
-
-    if draft.sent:
-        raise HTTPException(status_code=400, detail="Cannot approve a sent draft.")
-
-    draft.approved = True
-
-    session.add(draft)
-    session.commit()
-
-    return RedirectResponse(
-        url="/dashboard?message=Draft approved.",
-        status_code=303,
-    )
-
-
-@app.post("/dashboard/drafts/approve-campaign")
-def dashboard_approve_campaign(
-    request: Request,
-    campaign_id: int = Form(...),
-    session: Session = Depends(get_session),
-):
-    require_dashboard_login(request)
-
-    campaign = session.get(Campaign, campaign_id)
-
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
-
-    drafts = session.exec(
-        select(EmailDraft).where(
-            EmailDraft.campaign_id == campaign_id,
-            EmailDraft.sent == False,
-        )
-    ).all()
-
-    approved_count = 0
-
-    for draft in drafts:
-        draft.approved = True
-        session.add(draft)
-        approved_count += 1
-
-    session.commit()
-
-    return RedirectResponse(
-        url=f"/dashboard?message=Approved {approved_count} drafts for {campaign.name}.",
-        status_code=303,
-    )
-
-
-@app.post("/dashboard/drafts/approve-day")
-def dashboard_approve_day(
-    request: Request,
-    campaign_id: int = Form(...),
-    send_day: int = Form(...),
-    session: Session = Depends(get_session),
-):
-    require_dashboard_login(request)
-
-    drafts = session.exec(
-        select(EmailDraft).where(
-            EmailDraft.campaign_id == campaign_id,
-            EmailDraft.send_day == send_day,
-            EmailDraft.sent == False,
-        )
-    ).all()
-
-    approved_count = 0
-
-    for draft in drafts:
-        draft.approved = True
-        session.add(draft)
-        approved_count += 1
-
-    session.commit()
-
-    return RedirectResponse(
-        url=f"/dashboard?message=Approved {approved_count} drafts for Day {send_day}.",
+        url=f"/dashboard/campaigns/{draft.campaign_id}?message=Draft saved. Re-approval required.",
         status_code=303,
     )
 
 
 @app.post("/dashboard/drafts/{draft_id}/send")
-def dashboard_send_draft(
+def send_single_draft(
     request: Request,
     draft_id: int,
     session: Session = Depends(get_session),
@@ -922,6 +1115,8 @@ def dashboard_send_draft(
 
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found.")
+
+    campaign_id = draft.campaign_id
 
     if not draft.approved:
         raise HTTPException(status_code=400, detail="Draft must be approved first.")
@@ -935,10 +1130,7 @@ def dashboard_send_draft(
         raise HTTPException(status_code=404, detail="Contact not found.")
 
     if contact.unsubscribed or contact.suppressed:
-        raise HTTPException(
-            status_code=400,
-            detail="Contact is unsubscribed or suppressed.",
-        )
+        raise HTTPException(status_code=400, detail="Contact is unsubscribed or suppressed.")
 
     suppression = session.exec(
         select(Suppression).where(Suppression.email == contact.email)
@@ -955,7 +1147,7 @@ def dashboard_send_draft(
 
     if DEMO_MODE:
         return RedirectResponse(
-            url="/dashboard?message=Demo mode is on. Email was previewed in logs but not sent.",
+            url=f"/dashboard/campaigns/{campaign_id}?message=Demo mode is on. Email was previewed in logs but not sent.",
             status_code=303,
         )
 
@@ -966,21 +1158,23 @@ def dashboard_send_draft(
     session.commit()
 
     return RedirectResponse(
-        url="/dashboard?message=Email sent.",
+        url=f"/dashboard/campaigns/{campaign_id}?message=Email sent.",
         status_code=303,
     )
 
 
-@app.post("/dashboard/drafts/send-day")
-def dashboard_send_day(
+@app.post("/dashboard/campaigns/{campaign_id}/drafts/send-day")
+def send_campaign_day(
+    campaign_id: int,
     request: Request,
-    campaign_id: int = Form(...),
     send_day: int = Form(...),
     max_send: int = Form(10),
     dry_run: str = Form(None),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
+
+    get_campaign_or_404(campaign_id, session)
 
     drafts = session.exec(
         select(EmailDraft).where(
@@ -1054,43 +1248,7 @@ def dashboard_send_day(
         message += f" Errors: {len(errors)}. Check logs."
 
     return RedirectResponse(
-        url=f"/dashboard?message={message}",
-        status_code=303,
-    )
-
-
-@app.post("/dashboard/contacts/{contact_id}/unsubscribe")
-def dashboard_unsubscribe_contact(
-    request: Request,
-    contact_id: int,
-    session: Session = Depends(get_session),
-):
-    require_dashboard_login(request)
-
-    contact = session.get(Contact, contact_id)
-
-    if not contact:
-        raise HTTPException(status_code=404, detail="Contact not found.")
-
-    contact.unsubscribed = True
-    contact.suppressed = True
-
-    existing = session.exec(
-        select(Suppression).where(Suppression.email == contact.email)
-    ).first()
-
-    if not existing:
-        suppression = Suppression(
-            email=contact.email,
-            reason="manual unsubscribe",
-        )
-        session.add(suppression)
-
-    session.add(contact)
-    session.commit()
-
-    return RedirectResponse(
-        url="/dashboard?message=Contact unsubscribed and suppressed.",
+        url=f"/dashboard/campaigns/{campaign_id}?message={message}",
         status_code=303,
     )
 
