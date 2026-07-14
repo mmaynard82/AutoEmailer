@@ -251,10 +251,10 @@ def safe_update_hubspot_dnc(email: str):
         print(f"HubSpot DNC update result for {email}: {result}")
         return result
     except Exception as e:
-        print(f"HubSpot DNC update failed for {email}: {e}")
+        print(f"HubSpot DNC update failed for {email}: {repr(e)}")
         return {
             "status": "failed",
-            "error": str(e),
+            "error": repr(e),
         }
 
 
@@ -310,7 +310,6 @@ def login_submit(
     2. Pilot login using AppUser email/password.
     """
 
-    # Admin fallback login
     if password == ADMIN_PASSWORD:
         response = RedirectResponse(url="/dashboard", status_code=303)
         response.set_cookie(
@@ -329,7 +328,6 @@ def login_submit(
         )
         return response
 
-    # Pilot user login
     email_clean = email.strip().lower()
 
     if not email_clean:
@@ -471,11 +469,11 @@ def new_workspace_page(
                         <input type="text" name="name" required placeholder="Example: Evan Burns Pilot">
 
                         <label>Sender Email</label>
-                        <input type="email" name="sender_email" required placeholder="evan.burns@mail.evolutioncrm.us">
+                        <input type="email" name="sender_email" required placeholder="mmaynard@evolutioncrm.us">
 
                         <p class="muted">
-                            This is the AWS SES sender email used for campaigns in this workspace.
-                            The sender must be verified in SES, or the sending subdomain must be verified.
+                            This is the visible From address used by AWS SES for this workspace.
+                            It must be verified in SES, or the sender domain must be verified in SES.
                         </p>
 
                         <label>Notes</label>
@@ -698,9 +696,9 @@ def home(request: Request):
             "Open campaign workspace",
             "Add/edit email steps",
             "Upload contacts to a campaign",
-            "Generate drafts for all steps or one selected step",
+            "Generate drafts",
             "Approve drafts",
-            "Preview before sending",
+            "Preview/send",
         ],
     }
 
@@ -795,12 +793,17 @@ def safe_send_email(
     subject: str,
     body: str,
     from_email: Optional[str] = None,
+    reply_to_email: Optional[str] = None,
 ) -> dict:
     final_sender = from_email or DEFAULT_SES_FROM_EMAIL
+
+    if not final_sender:
+        raise ValueError("Missing sender email. Set workspace sender_email or SES_FROM_EMAIL.")
 
     if DEMO_MODE:
         print("\nDEMO MODE - Real email blocked")
         print(f"From: {final_sender}")
+        print(f"Reply-To: {reply_to_email or final_sender}")
         print(f"To: {to_email}")
         print(f"Subject: {subject}")
         print(body)
@@ -816,6 +819,7 @@ def safe_send_email(
         subject=subject,
         body=body,
         from_email=final_sender,
+        reply_to_email=reply_to_email,
     )
 
     return {
@@ -894,7 +898,7 @@ def build_campaign_context(
 
 
 # ------------------------------------------------------------
-# Dashboard: Campaign List
+# Dashboard
 # ------------------------------------------------------------
 
 @app.get("/dashboard")
@@ -1370,7 +1374,7 @@ def import_hubspot_to_campaign(
     except Exception as e:
         return redirect_with_message(
             f"/dashboard/campaigns/{campaign_id}",
-            f"HubSpot import failed: {str(e)}",
+            f"HubSpot import failed: {repr(e)}",
         )
 
     imported = 0
@@ -1378,7 +1382,6 @@ def import_hubspot_to_campaign(
 
     for item in hubspot_data.get("results", []):
         props = item.get("properties", {})
-
         email = (props.get("email") or "").strip().lower()
 
         if not email or "@" not in email:
@@ -1470,7 +1473,7 @@ def export_campaign_to_hubspot(
 
         except Exception as e:
             failed += 1
-            print(f"HubSpot export exception for {contact.email}: {e}")
+            print(f"HubSpot export exception for {contact.email}: {repr(e)}")
 
     return redirect_with_message(
         f"/dashboard/campaigns/{campaign_id}",
@@ -1523,7 +1526,6 @@ def generate_campaign_drafts(
             )
 
         require_step_access(selected_step, request, session)
-
         steps = [selected_step]
 
     steps = sorted(steps, key=lambda step: step.step_number)
@@ -1822,12 +1824,22 @@ def send_single_draft(
             detail="Missing sender email. Add sender_email to the workspace or set SES_FROM_EMAIL.",
         )
 
-    safe_send_email(
-        to_email=contact.email,
-        subject=draft.subject,
-        body=draft.body,
-        from_email=sender_email,
-    )
+    try:
+        safe_send_email(
+            to_email=contact.email,
+            subject=draft.subject,
+            body=draft.body,
+            from_email=sender_email,
+            reply_to_email=sender_email,
+        )
+    except Exception as e:
+        error_message = f"{contact.email}: {repr(e)}"
+        print(f"SES SINGLE SEND ERROR: {error_message}")
+
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign_id}",
+            f"Send failed from {sender_email}. {error_message}",
+        )
 
     if DEMO_MODE:
         return redirect_with_message(
@@ -1909,6 +1921,7 @@ def send_campaign_day(
             if dry_run or DEMO_MODE:
                 print("\nDRY RUN / DEMO MODE - Email not sent")
                 print(f"From: {sender_email}")
+                print(f"Reply-To: {sender_email}")
                 print(f"To: {contact.email}")
                 print(f"Subject: {draft.subject}")
                 print(draft.body)
@@ -1920,6 +1933,7 @@ def send_campaign_day(
                     subject=draft.subject,
                     body=draft.body,
                     from_email=sender_email,
+                    reply_to_email=sender_email,
                 )
 
                 draft.sent = True
@@ -1929,7 +1943,9 @@ def send_campaign_day(
                 sent_count += 1
 
         except Exception as e:
-            errors.append(f"{contact.email}: {str(e)}")
+            error_message = f"{contact.email}: {repr(e)}"
+            print(f"SES SEND ERROR: {error_message}")
+            errors.append(error_message)
 
     session.commit()
 
@@ -1941,7 +1957,8 @@ def send_campaign_day(
         message = f"Sent {sent_count} emails from {sender_email} for Day {send_day}. Skipped {skipped_count}."
 
     if errors:
-        message += f" Errors: {len(errors)}. Check logs."
+        error_preview = " | ".join(errors[:2])
+        message += f" Errors: {len(errors)}. {error_preview}"
 
     return redirect_with_message(
         f"/dashboard/campaigns/{campaign_id}",
