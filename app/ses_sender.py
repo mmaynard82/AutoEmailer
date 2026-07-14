@@ -5,9 +5,34 @@ from dotenv import load_dotenv
 load_dotenv()
 
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 DEFAULT_SES_FROM_EMAIL = os.getenv("SES_FROM_EMAIL")
 
-ses_client = boto3.client("ses", region_name=AWS_REGION)
+
+def get_ses_client():
+    missing = []
+
+    if not AWS_ACCESS_KEY_ID:
+        missing.append("AWS_ACCESS_KEY_ID")
+
+    if not AWS_SECRET_ACCESS_KEY:
+        missing.append("AWS_SECRET_ACCESS_KEY")
+
+    if not AWS_REGION:
+        missing.append("AWS_REGION")
+
+    if missing:
+        raise ValueError(
+            f"Missing AWS environment variables in Render: {', '.join(missing)}"
+        )
+
+    return boto3.client(
+        "ses",
+        region_name=AWS_REGION,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    )
 
 
 def send_email_via_ses(
@@ -20,13 +45,13 @@ def send_email_via_ses(
     """
     Sends email through AWS SES.
 
-    Visible sender:
+    Visible From:
     - Uses from_email if provided.
-    - Falls back to SES_FROM_EMAIL from .env / Render env.
+    - Falls back to SES_FROM_EMAIL from Render/local env.
 
     Reply-To:
     - Uses reply_to_email if provided.
-    - If not provided, replies go to the visible sender.
+    - Otherwise replies go to the visible sender.
     """
 
     sender = from_email or DEFAULT_SES_FROM_EMAIL
@@ -58,6 +83,7 @@ def send_email_via_ses(
     if reply_to_email:
         email_payload["ReplyToAddresses"] = [reply_to_email]
 
+    ses_client = get_ses_client()
     response = ses_client.send_email(**email_payload)
 
     return response
