@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI Emailer Login</title>
+    <title>Login - AI Emailer</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -11,76 +11,127 @@
             padding: 0;
         }
 
-        .container {
-            max-width: 420px;
-            margin: 90px auto;
-            background: white;
+        .page {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+
+        .card {
+            background: white;
+            width: 100%;
+            max-width: 430px;
+            padding: 32px;
+            border-radius: 14px;
+            box-shadow: 0 1px 10px rgba(0,0,0,0.10);
         }
 
         h1 {
+            margin-top: 0;
             margin-bottom: 8px;
+            font-size: 26px;
         }
 
         .subtitle {
             color: #666;
-            margin-bottom: 25px;
+            font-size: 14px;
+            margin-bottom: 24px;
+            line-height: 1.5;
         }
 
-        input, button {
+        label {
+            display: block;
+            font-weight: bold;
+            margin-top: 14px;
+            margin-bottom: 6px;
+        }
+
+        input {
             width: 100%;
             padding: 11px;
-            margin-top: 8px;
-            margin-bottom: 15px;
             box-sizing: border-box;
             font-size: 15px;
+            border: 1px solid #d1d5db;
+            border-radius: 7px;
         }
 
         button {
+            width: 100%;
+            margin-top: 22px;
+            padding: 12px 14px;
             background: #1f5eff;
             color: white;
             border: none;
-            border-radius: 6px;
+            border-radius: 7px;
             font-weight: bold;
+            font-size: 15px;
             cursor: pointer;
         }
 
         .error {
-            background: #ffe8e8;
-            border-left: 5px solid #b00020;
+            background: #fef2f2;
+            border-left: 5px solid #b91c1c;
+            color: #991b1b;
             padding: 12px;
             margin-bottom: 18px;
-            color: #7a0015;
+            font-size: 14px;
+        }
+
+        .demo {
+            background: #fff7ed;
+            border-left: 5px solid #f97316;
+            padding: 12px;
+            margin-bottom: 18px;
+            font-size: 14px;
+            color: #92400e;
         }
 
         .small {
             color: #666;
-            font-size: 13px;
+            font-size: 12px;
+            line-height: 1.5;
+            margin-top: 16px;
         }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>AI Emailer</h1>
-    <div class="subtitle">Login to access the dashboard.</div>
+<div class="page">
+    <div class="card">
+        <h1>AI Emailer Login</h1>
 
-    {% if error %}
-        <div class="error">{{ error }}</div>
-    {% endif %}
+        <div class="subtitle">
+            Sign in to manage campaigns, contacts, email drafts, approvals, and sending.
+        </div>
 
-    <form method="post" action="/login">
-        <label>Password</label>
-        <input type="password" name="password" required autofocus>
+        {% if demo_mode %}
+            <div class="demo">
+                Demo mode is currently on. Emails will preview in logs but will not actually send.
+            </div>
+        {% endif %}
 
-        <button type="submit">Login</button>
-    </form>
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
 
-    <p class="small">
-        This is a private demo dashboard. Do not share access publicly.
-    </p>
+        <form method="post" action="/login">
+            <label>Email</label>
+            <input type="email" name="email" placeholder="pilot@example.com">
+
+            <label>Password</label>
+            <input type="password" name="password" required placeholder="Password">
+
+            <button type="submit">Login</button>
+        </form>
+
+        <div class="small">
+            Admin login: you may leave email blank and use the admin password.
+            Pilot users should enter their assigned email and password.
+        </div>
+    </div>
 </div>
 
 </body>

@@ -3,16 +3,18 @@ import hmac
 import hashlib
 from datetime import datetime
 from typing import List
+from urllib.parse import quote
 
 import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Request, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from passlib.context import CryptContext
 from sqlmodel import Session, select
 
 from app.database import create_db_and_tables, get_session
-from app.models import Contact, Campaign, CadenceStep, EmailDraft, Suppression
+from app.models import Contact, Campaign, CadenceStep, EmailDraft, Suppression, AppUser
 from app.ai_writer import render_template_email
 from app.ses_sender import send_email_via_ses
 from app.hubspot_client import (
@@ -27,6 +29,7 @@ load_dotenv()
 app = FastAPI(title="AI Emailer MVP")
 
 templates = Jinja2Templates(directory="app/templates")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 DEMO_MODE = os.getenv("DEMO_MODE", "true").lower() == "true"
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme")
@@ -37,6 +40,18 @@ APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/")
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
+
+
+# ------------------------------------------------------------
+# Redirect Helper
+# ------------------------------------------------------------
+
+def redirect_with_message(url: str, message: str):
+    separator = "&" if "?" in url else "?"
+    return RedirectResponse(
+        url=f"{url}{separator}message={quote(message)}",
+        status_code=303,
+    )
 
 
 # ------------------------------------------------------------
@@ -59,9 +74,24 @@ def is_logged_in(request: Request) -> bool:
     return hmac.compare_digest(token, expected_token)
 
 
+def current_user_email(request: Request) -> str:
+    return request.cookies.get("ai_emailer_user", "")
+
+
+def is_admin(request: Request) -> bool:
+    return current_user_email(request) == "admin"
+
+
 def require_dashboard_login(request: Request):
     if not is_logged_in(request):
         raise HTTPException(status_code=303, headers={"Location": "/login"})
+
+
+def require_admin_login(request: Request):
+    require_dashboard_login(request)
+
+    if not is_admin(request):
+        raise HTTPException(status_code=403, detail="Admin access required.")
 
 
 # ------------------------------------------------------------
@@ -123,26 +153,93 @@ def login_page(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="login.html",
-        context={"error": ""},
+        context={
+            "error": "",
+            "demo_mode": DEMO_MODE,
+        },
     )
 
 
 @app.post("/login")
 def login_submit(
     request: Request,
+    email: str = Form(""),
     password: str = Form(...),
+    session: Session = Depends(get_session),
 ):
-    if password != ADMIN_PASSWORD:
+    """
+    Allows two login paths:
+    1. Admin login using ADMIN_PASSWORD. Email can be blank.
+    2. Pilot login using AppUser email/password.
+    """
+
+    # Admin fallback login
+    if password == ADMIN_PASSWORD:
+        response = RedirectResponse(url="/dashboard", status_code=303)
+        response.set_cookie(
+            key="ai_emailer_auth",
+            value=make_auth_token(),
+            httponly=True,
+            samesite="lax",
+            max_age=60 * 60 * 8,
+        )
+        response.set_cookie(
+            key="ai_emailer_user",
+            value="admin",
+            httponly=True,
+            samesite="lax",
+            max_age=60 * 60 * 8,
+        )
+        return response
+
+    # Pilot user login
+    email_clean = email.strip().lower()
+
+    if not email_clean:
         return templates.TemplateResponse(
             request=request,
             name="login.html",
-            context={"error": "Incorrect password."},
+            context={
+                "error": "Enter your email and password.",
+                "demo_mode": DEMO_MODE,
+            },
+        )
+
+    user = session.exec(
+        select(AppUser).where(AppUser.email == email_clean)
+    ).first()
+
+    if not user or not user.is_active:
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "error": "Incorrect email or password.",
+                "demo_mode": DEMO_MODE,
+            },
+        )
+
+    if not pwd_context.verify(password, user.password_hash):
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "error": "Incorrect email or password.",
+                "demo_mode": DEMO_MODE,
+            },
         )
 
     response = RedirectResponse(url="/dashboard", status_code=303)
     response.set_cookie(
         key="ai_emailer_auth",
         value=make_auth_token(),
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 8,
+    )
+    response.set_cookie(
+        key="ai_emailer_user",
+        value=user.email,
         httponly=True,
         samesite="lax",
         max_age=60 * 60 * 8,
@@ -155,7 +252,135 @@ def login_submit(
 def logout():
     response = RedirectResponse(url="/login", status_code=303)
     response.delete_cookie("ai_emailer_auth")
+    response.delete_cookie("ai_emailer_user")
     return response
+
+
+# ------------------------------------------------------------
+# Admin Pilot User Management
+# ------------------------------------------------------------
+
+@app.get("/admin/pilot-users/new", response_class=HTMLResponse)
+def new_pilot_user_page(
+    request: Request,
+    message: str = "",
+):
+    require_admin_login(request)
+
+    return HTMLResponse(
+        content=f"""
+        <html>
+            <head>
+                <title>Create Pilot User</title>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        background: #f6f7f9;
+                        padding: 40px;
+                    }}
+                    .card {{
+                        background: white;
+                        max-width: 560px;
+                        padding: 28px;
+                        border-radius: 12px;
+                        box-shadow: 0 1px 6px rgba(0,0,0,0.10);
+                    }}
+                    label {{
+                        display: block;
+                        font-weight: bold;
+                        margin-top: 14px;
+                    }}
+                    input {{
+                        width: 100%;
+                        padding: 10px;
+                        margin-top: 5px;
+                        box-sizing: border-box;
+                    }}
+                    button {{
+                        margin-top: 18px;
+                        padding: 10px 14px;
+                        background: #1f5eff;
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        font-weight: bold;
+                        cursor: pointer;
+                    }}
+                    a {{
+                        color: #1f5eff;
+                    }}
+                    .message {{
+                        background: #ecfdf5;
+                        border-left: 5px solid #047857;
+                        padding: 12px;
+                        margin-bottom: 18px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <p><a href="/dashboard">Back to Dashboard</a></p>
+                    <h2>Create Pilot User</h2>
+
+                    {f'<div class="message">{message}</div>' if message else ''}
+
+                    <form method="post" action="/admin/pilot-users">
+                        <label>Name</label>
+                        <input type="text" name="name" placeholder="Pilot User">
+
+                        <label>Email</label>
+                        <input type="email" name="email" required placeholder="pilot@example.com">
+
+                        <label>Password</label>
+                        <input type="text" name="password" required placeholder="temporary-password">
+
+                        <button type="submit">Create Pilot User</button>
+                    </form>
+                </div>
+            </body>
+        </html>
+        """,
+        status_code=200,
+    )
+
+
+@app.post("/admin/pilot-users")
+def create_pilot_user(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    name: str = Form("Pilot User"),
+    session: Session = Depends(get_session),
+):
+    require_admin_login(request)
+
+    email_clean = email.strip().lower()
+
+    existing = session.exec(
+        select(AppUser).where(AppUser.email == email_clean)
+    ).first()
+
+    if existing:
+        return redirect_with_message(
+            "/admin/pilot-users/new",
+            "Pilot user already exists.",
+        )
+
+    user = AppUser(
+        email=email_clean,
+        password_hash=pwd_context.hash(password),
+        name=name.strip() or "Pilot User",
+        role="pilot",
+        is_active=True,
+    )
+
+    session.add(user)
+    session.commit()
+
+    return redirect_with_message(
+        "/admin/pilot-users/new",
+        f"Pilot user created for {email_clean}.",
+    )
 
 
 # ------------------------------------------------------------
@@ -170,6 +395,7 @@ def home(request: Request):
         "message": "AI Emailer MVP is running",
         "dashboard": dashboard_link,
         "demo_mode": DEMO_MODE,
+        "logged_in_as": current_user_email(request),
         "next_steps": [
             "Login",
             "Create campaign",
@@ -413,6 +639,8 @@ def dashboard(
             "demo_mode": DEMO_MODE,
             "campaigns": campaign_rows,
             "analytics": analytics,
+            "current_user": current_user_email(request),
+            "is_admin": is_admin(request),
         },
     )
 
@@ -441,9 +669,9 @@ def dashboard_create_campaign(
     session.commit()
     session.refresh(campaign)
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign.id}?message=Campaign created. Add an email step next.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign.id}",
+        "Campaign created. Add an email step next.",
     )
 
 
@@ -469,6 +697,8 @@ def campaign_detail(
             "steps": steps,
             "drafts": draft_rows,
             "stats": stats,
+            "current_user": current_user_email(request),
+            "is_admin": is_admin(request),
         },
     )
 
@@ -493,9 +723,9 @@ def edit_campaign(
     session.add(campaign)
     session.commit()
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign_id}?message=Campaign settings updated.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        "Campaign settings updated.",
     )
 
 
@@ -536,9 +766,9 @@ def add_campaign_step(
     session.add(step)
     session.commit()
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign_id}?message=Email step added.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        "Email step added.",
     )
 
 
@@ -575,9 +805,9 @@ def edit_campaign_step(
     session.add(step)
     session.commit()
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{step.campaign_id}?message=Email step updated. Existing drafts are not changed automatically.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{step.campaign_id}",
+        "Email step updated. Existing drafts are not changed automatically.",
     )
 
 
@@ -601,17 +831,17 @@ def delete_campaign_step(
     ).all()
 
     if existing_drafts:
-        return RedirectResponse(
-            url=f"/dashboard/campaigns/{campaign_id}?message=Cannot delete this step because drafts already exist for it.",
-            status_code=303,
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign_id}",
+            "Cannot delete this step because drafts already exist for it.",
         )
 
     session.delete(step)
     session.commit()
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign_id}?message=Email step deleted.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        "Email step deleted.",
     )
 
 
@@ -681,9 +911,9 @@ async def upload_campaign_contacts(
 
     session.commit()
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign_id}?message=Imported {imported} contacts into {campaign.name}. Skipped {skipped}.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        f"Imported {imported} contacts into {campaign.name}. Skipped {skipped}.",
     )
 
 
@@ -721,9 +951,9 @@ def dashboard_unsubscribe_contact(
 
     safe_update_hubspot_dnc(contact.email)
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign_id}?message=Contact unsubscribed, suppressed, and HubSpot DNC update attempted.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        "Contact unsubscribed, suppressed, and HubSpot DNC update attempted.",
     )
 
 
@@ -745,9 +975,9 @@ def import_hubspot_to_campaign(
     try:
         hubspot_data = get_hubspot_contacts(limit=limit)
     except Exception as e:
-        return RedirectResponse(
-            url=f"/dashboard/campaigns/{campaign_id}?message=HubSpot import failed: {str(e)}",
-            status_code=303,
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign_id}",
+            f"HubSpot import failed: {str(e)}",
         )
 
     imported = 0
@@ -789,9 +1019,9 @@ def import_hubspot_to_campaign(
 
     session.commit()
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign_id}?message=Imported {imported} HubSpot contacts into {campaign.name}. Skipped {skipped}.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        f"Imported {imported} HubSpot contacts into {campaign.name}. Skipped {skipped}.",
     )
 
 
@@ -848,12 +1078,9 @@ def export_campaign_to_hubspot(
             failed += 1
             print(f"HubSpot export exception for {contact.email}: {e}")
 
-    return RedirectResponse(
-        url=(
-            f"/dashboard/campaigns/{campaign_id}?message="
-            f"HubSpot export complete. Created {created}, updated {updated}, skipped {skipped}, failed {failed}."
-        ),
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        f"HubSpot export complete. Created {created}, updated {updated}, skipped {skipped}, failed {failed}.",
     )
 
 
@@ -888,17 +1115,17 @@ def generate_campaign_drafts(
         try:
             selected_step_id = int(cadence_step_id)
         except ValueError:
-            return RedirectResponse(
-                url=f"/dashboard/campaigns/{campaign_id}?message=Invalid email step selected.",
-                status_code=303,
+            return redirect_with_message(
+                f"/dashboard/campaigns/{campaign_id}",
+                "Invalid email step selected.",
             )
 
         selected_step = session.get(CadenceStep, selected_step_id)
 
         if not selected_step or selected_step.campaign_id != campaign_id:
-            return RedirectResponse(
-                url=f"/dashboard/campaigns/{campaign_id}?message=Selected email step not found for this campaign.",
-                status_code=303,
+            return redirect_with_message(
+                f"/dashboard/campaigns/{campaign_id}",
+                "Selected email step not found for this campaign.",
             )
 
         steps = [selected_step]
@@ -906,15 +1133,15 @@ def generate_campaign_drafts(
     steps = sorted(steps, key=lambda step: step.step_number)
 
     if not contacts:
-        return RedirectResponse(
-            url=f"/dashboard/campaigns/{campaign_id}?message=No contacts found. Upload contacts to this campaign first.",
-            status_code=303,
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign_id}",
+            "No contacts found. Upload contacts to this campaign first.",
         )
 
     if not steps:
-        return RedirectResponse(
-            url=f"/dashboard/campaigns/{campaign_id}?message=No email steps found. Add an email step first.",
-            status_code=303,
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign_id}",
+            "No email steps found. Add an email step first.",
         )
 
     created = 0
@@ -974,14 +1201,11 @@ def generate_campaign_drafts(
 
     session.commit()
 
-    if cadence_step_id == "all":
-        selected_label = "all email steps"
-    else:
-        selected_label = "selected email step only"
+    selected_label = "all email steps" if cadence_step_id == "all" else "selected email step only"
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign_id}?message=Created {created} drafts for {selected_label}. Skipped {skipped} existing drafts.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        f"Created {created} drafts for {selected_label}. Skipped {skipped} existing drafts.",
     )
 
 
@@ -1011,9 +1235,9 @@ def approve_all_campaign_drafts(
 
     session.commit()
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign_id}?message=Approved {approved_count} drafts for {campaign.name}.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        f"Approved {approved_count} drafts for {campaign.name}.",
     )
 
 
@@ -1045,9 +1269,9 @@ def approve_campaign_day(
 
     session.commit()
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign_id}?message=Approved {approved_count} drafts for Day {send_day}.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        f"Approved {approved_count} drafts for Day {send_day}.",
     )
 
 
@@ -1072,9 +1296,9 @@ def approve_single_draft(
     session.add(draft)
     session.commit()
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{draft.campaign_id}?message=Draft approved.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{draft.campaign_id}",
+        "Draft approved.",
     )
 
 
@@ -1104,6 +1328,8 @@ def dashboard_edit_draft_page(
             "campaign": campaign,
             "step": step,
             "demo_mode": DEMO_MODE,
+            "current_user": current_user_email(request),
+            "is_admin": is_admin(request),
         },
     )
 
@@ -1133,9 +1359,9 @@ def dashboard_save_draft_edit(
     session.add(draft)
     session.commit()
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{draft.campaign_id}?message=Draft saved. Re-approval required.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{draft.campaign_id}",
+        "Draft saved. Re-approval required.",
     )
 
 
@@ -1182,9 +1408,9 @@ def send_single_draft(
     )
 
     if DEMO_MODE:
-        return RedirectResponse(
-            url=f"/dashboard/campaigns/{campaign_id}?message=Demo mode is on. Email was previewed in logs but not sent.",
-            status_code=303,
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign_id}",
+            "Demo mode is on. Email was previewed in logs but not sent.",
         )
 
     draft.sent = True
@@ -1193,9 +1419,9 @@ def send_single_draft(
     session.add(draft)
     session.commit()
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign_id}?message=Email sent.",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        "Email sent.",
     )
 
 
@@ -1283,9 +1509,9 @@ def send_campaign_day(
     if errors:
         message += f" Errors: {len(errors)}. Check logs."
 
-    return RedirectResponse(
-        url=f"/dashboard/campaigns/{campaign_id}?message={message}",
-        status_code=303,
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        message,
     )
 
 
