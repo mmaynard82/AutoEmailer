@@ -2,7 +2,7 @@ import os
 import hmac
 import hashlib
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from urllib.parse import quote
 
 import pandas as pd
@@ -14,7 +14,15 @@ from passlib.context import CryptContext
 from sqlmodel import Session, select
 
 from app.database import create_db_and_tables, get_session
-from app.models import Contact, Campaign, CadenceStep, EmailDraft, Suppression, AppUser
+from app.models import (
+    Organization,
+    AppUser,
+    Contact,
+    Campaign,
+    CadenceStep,
+    EmailDraft,
+    Suppression,
+)
 from app.ai_writer import render_template_email
 from app.ses_sender import send_email_via_ses
 from app.hubspot_client import (
@@ -35,6 +43,7 @@ DEMO_MODE = os.getenv("DEMO_MODE", "true").lower() == "true"
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme")
 SECRET_KEY = os.getenv("SECRET_KEY", "local-dev-secret")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/")
+DEFAULT_SES_FROM_EMAIL = os.getenv("SES_FROM_EMAIL")
 
 
 @app.on_event("startup")
@@ -92,6 +101,134 @@ def require_admin_login(request: Request):
 
     if not is_admin(request):
         raise HTTPException(status_code=403, detail="Admin access required.")
+
+
+# ------------------------------------------------------------
+# Workspace / Organization Helpers
+# ------------------------------------------------------------
+
+def get_current_app_user(
+    request: Request,
+    session: Session,
+) -> Optional[AppUser]:
+    user_email = current_user_email(request)
+
+    if not user_email or user_email == "admin":
+        return None
+
+    return session.exec(
+        select(AppUser).where(AppUser.email == user_email)
+    ).first()
+
+
+def get_current_organization_id(
+    request: Request,
+    session: Session,
+) -> Optional[int]:
+    """
+    Admin returns None, meaning access to all workspaces.
+    Pilot users return their assigned organization_id.
+    """
+    if is_admin(request):
+        return None
+
+    user = get_current_app_user(request, session)
+
+    if not user or not user.organization_id:
+        raise HTTPException(status_code=403, detail="No workspace assigned.")
+
+    return user.organization_id
+
+
+def user_can_access_campaign(
+    request: Request,
+    session: Session,
+    campaign: Campaign,
+) -> bool:
+    if is_admin(request):
+        return True
+
+    org_id = get_current_organization_id(request, session)
+    return campaign.organization_id == org_id
+
+
+def get_campaign_or_404_for_user(
+    campaign_id: int,
+    request: Request,
+    session: Session,
+) -> Campaign:
+    campaign = session.get(Campaign, campaign_id)
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found.")
+
+    if not user_can_access_campaign(request, session, campaign):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have access to this workspace.",
+        )
+
+    return campaign
+
+
+def require_contact_access(
+    contact: Contact,
+    request: Request,
+    session: Session,
+):
+    if is_admin(request):
+        return
+
+    org_id = get_current_organization_id(request, session)
+
+    if contact.organization_id != org_id:
+        raise HTTPException(status_code=403, detail="Contact access denied.")
+
+
+def require_draft_access(
+    draft: EmailDraft,
+    request: Request,
+    session: Session,
+):
+    if is_admin(request):
+        return
+
+    org_id = get_current_organization_id(request, session)
+
+    if draft.organization_id != org_id:
+        raise HTTPException(status_code=403, detail="Draft access denied.")
+
+
+def require_step_access(
+    step: CadenceStep,
+    request: Request,
+    session: Session,
+):
+    if is_admin(request):
+        return
+
+    org_id = get_current_organization_id(request, session)
+
+    if step.organization_id != org_id:
+        raise HTTPException(status_code=403, detail="Email step access denied.")
+
+
+def get_sender_email_for_organization(
+    organization_id: Optional[int],
+    session: Session,
+) -> Optional[str]:
+    """
+    Sender priority:
+    1. Organization sender_email
+    2. SES_FROM_EMAIL fallback from env
+    """
+    if organization_id:
+        organization = session.get(Organization, organization_id)
+
+        if organization and organization.sender_email:
+            return organization.sender_email.strip().lower()
+
+    return DEFAULT_SES_FROM_EMAIL
 
 
 # ------------------------------------------------------------
@@ -257,6 +394,130 @@ def logout():
 
 
 # ------------------------------------------------------------
+# Admin Workspace Management
+# ------------------------------------------------------------
+
+@app.get("/admin/workspaces/new", response_class=HTMLResponse)
+def new_workspace_page(
+    request: Request,
+    message: str = "",
+):
+    require_admin_login(request)
+
+    return HTMLResponse(
+        content=f"""
+        <html>
+            <head>
+                <title>Create Workspace</title>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        background: #f6f7f9;
+                        padding: 40px;
+                    }}
+                    .card {{
+                        background: white;
+                        max-width: 600px;
+                        padding: 28px;
+                        border-radius: 12px;
+                        box-shadow: 0 1px 6px rgba(0,0,0,0.10);
+                    }}
+                    label {{
+                        display: block;
+                        font-weight: bold;
+                        margin-top: 14px;
+                    }}
+                    input, textarea {{
+                        width: 100%;
+                        padding: 10px;
+                        margin-top: 5px;
+                        box-sizing: border-box;
+                    }}
+                    button {{
+                        margin-top: 18px;
+                        padding: 10px 14px;
+                        background: #1f5eff;
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        font-weight: bold;
+                        cursor: pointer;
+                    }}
+                    a {{
+                        color: #1f5eff;
+                    }}
+                    .message {{
+                        background: #ecfdf5;
+                        border-left: 5px solid #047857;
+                        padding: 12px;
+                        margin-bottom: 18px;
+                    }}
+                    .muted {{
+                        color: #666;
+                        font-size: 13px;
+                        line-height: 1.4;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <p><a href="/dashboard">Back to Dashboard</a></p>
+                    <h2>Create Workspace</h2>
+
+                    {f'<div class="message">{message}</div>' if message else ''}
+
+                    <form method="post" action="/admin/workspaces">
+                        <label>Workspace Name</label>
+                        <input type="text" name="name" required placeholder="Example: Evan Burns Pilot">
+
+                        <label>Sender Email</label>
+                        <input type="email" name="sender_email" required placeholder="evan.burns@mail.evolutioncrm.us">
+
+                        <p class="muted">
+                            This is the AWS SES sender email used for campaigns in this workspace.
+                            The sender must be verified in SES, or the sending subdomain must be verified.
+                        </p>
+
+                        <label>Notes</label>
+                        <textarea name="notes" rows="4" placeholder="Optional notes about this pilot/client"></textarea>
+
+                        <button type="submit">Create Workspace</button>
+                    </form>
+                </div>
+            </body>
+        </html>
+        """,
+        status_code=200,
+    )
+
+
+@app.post("/admin/workspaces")
+def create_workspace(
+    request: Request,
+    name: str = Form(...),
+    sender_email: str = Form(...),
+    notes: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    require_admin_login(request)
+
+    workspace = Organization(
+        name=name.strip(),
+        sender_email=sender_email.strip().lower(),
+        notes=notes.strip() or None,
+    )
+
+    session.add(workspace)
+    session.commit()
+    session.refresh(workspace)
+
+    return redirect_with_message(
+        "/admin/workspaces/new",
+        f"Workspace created: {workspace.name}. Sender: {workspace.sender_email}.",
+    )
+
+
+# ------------------------------------------------------------
 # Admin Pilot User Management
 # ------------------------------------------------------------
 
@@ -264,8 +525,24 @@ def logout():
 def new_pilot_user_page(
     request: Request,
     message: str = "",
+    session: Session = Depends(get_session),
 ):
     require_admin_login(request)
+
+    organizations = session.exec(select(Organization)).all()
+
+    options_html = ""
+
+    for organization in organizations:
+        sender_display = organization.sender_email or "No sender set"
+        options_html += (
+            f'<option value="{organization.id}">'
+            f'{organization.name} - {sender_display}'
+            f'</option>'
+        )
+
+    if not options_html:
+        options_html = '<option value="">Create a workspace first</option>'
 
     return HTMLResponse(
         content=f"""
@@ -280,7 +557,7 @@ def new_pilot_user_page(
                     }}
                     .card {{
                         background: white;
-                        max-width: 560px;
+                        max-width: 600px;
                         padding: 28px;
                         border-radius: 12px;
                         box-shadow: 0 1px 6px rgba(0,0,0,0.10);
@@ -290,7 +567,7 @@ def new_pilot_user_page(
                         font-weight: bold;
                         margin-top: 14px;
                     }}
-                    input {{
+                    input, select {{
                         width: 100%;
                         padding: 10px;
                         margin-top: 5px;
@@ -320,11 +597,18 @@ def new_pilot_user_page(
             <body>
                 <div class="card">
                     <p><a href="/dashboard">Back to Dashboard</a></p>
+                    <p><a href="/admin/workspaces/new">Create Workspace</a></p>
+
                     <h2>Create Pilot User</h2>
 
                     {f'<div class="message">{message}</div>' if message else ''}
 
                     <form method="post" action="/admin/pilot-users">
+                        <label>Workspace</label>
+                        <select name="organization_id" required>
+                            {options_html}
+                        </select>
+
                         <label>Name</label>
                         <input type="text" name="name" placeholder="Pilot User">
 
@@ -347,12 +631,21 @@ def new_pilot_user_page(
 @app.post("/admin/pilot-users")
 def create_pilot_user(
     request: Request,
+    organization_id: int = Form(...),
     email: str = Form(...),
     password: str = Form(...),
     name: str = Form("Pilot User"),
     session: Session = Depends(get_session),
 ):
     require_admin_login(request)
+
+    organization = session.get(Organization, organization_id)
+
+    if not organization:
+        return redirect_with_message(
+            "/admin/pilot-users/new",
+            "Workspace not found. Create a workspace first.",
+        )
 
     email_clean = email.strip().lower()
 
@@ -367,6 +660,7 @@ def create_pilot_user(
         )
 
     user = AppUser(
+        organization_id=organization.id,
         email=email_clean,
         password_hash=pwd_context.hash(password),
         name=name.strip() or "Pilot User",
@@ -379,7 +673,7 @@ def create_pilot_user(
 
     return redirect_with_message(
         "/admin/pilot-users/new",
-        f"Pilot user created for {email_clean}.",
+        f"Pilot user created for {email_clean} in workspace {organization.name}.",
     )
 
 
@@ -398,6 +692,8 @@ def home(request: Request):
         "logged_in_as": current_user_email(request),
         "next_steps": [
             "Login",
+            "Create workspace",
+            "Create pilot user",
             "Create campaign",
             "Open campaign workspace",
             "Add/edit email steps",
@@ -455,11 +751,15 @@ def unsubscribe_via_link(
     contact.suppressed = True
 
     existing = session.exec(
-        select(Suppression).where(Suppression.email == contact.email)
+        select(Suppression).where(
+            Suppression.email == contact.email,
+            Suppression.organization_id == contact.organization_id,
+        )
     ).first()
 
     if not existing:
         suppression = Suppression(
+            organization_id=contact.organization_id,
             email=contact.email,
             reason="unsubscribe link",
         )
@@ -487,12 +787,20 @@ def unsubscribe_via_link(
 
 
 # ------------------------------------------------------------
-# Helpers
+# Send Helper
 # ------------------------------------------------------------
 
-def safe_send_email(to_email: str, subject: str, body: str) -> dict:
+def safe_send_email(
+    to_email: str,
+    subject: str,
+    body: str,
+    from_email: Optional[str] = None,
+) -> dict:
+    final_sender = from_email or DEFAULT_SES_FROM_EMAIL
+
     if DEMO_MODE:
         print("\nDEMO MODE - Real email blocked")
+        print(f"From: {final_sender}")
         print(f"To: {to_email}")
         print(f"Subject: {subject}")
         print(body)
@@ -507,6 +815,7 @@ def safe_send_email(to_email: str, subject: str, body: str) -> dict:
         to_email=to_email,
         subject=subject,
         body=body,
+        from_email=final_sender,
     )
 
     return {
@@ -515,17 +824,16 @@ def safe_send_email(to_email: str, subject: str, body: str) -> dict:
     }
 
 
-def get_campaign_or_404(campaign_id: int, session: Session) -> Campaign:
-    campaign = session.get(Campaign, campaign_id)
+# ------------------------------------------------------------
+# Campaign Context Helper
+# ------------------------------------------------------------
 
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
-
-    return campaign
-
-
-def build_campaign_context(campaign_id: int, session: Session):
-    campaign = get_campaign_or_404(campaign_id, session)
+def build_campaign_context(
+    campaign_id: int,
+    request: Request,
+    session: Session,
+):
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
 
     contacts = session.exec(
         select(Contact).where(Contact.campaign_id == campaign_id)
@@ -597,10 +905,34 @@ def dashboard(
 ):
     require_dashboard_login(request)
 
-    campaigns = session.exec(select(Campaign)).all()
-    contacts = session.exec(select(Contact)).all()
-    steps = session.exec(select(CadenceStep)).all()
-    drafts = session.exec(select(EmailDraft)).all()
+    org_id = get_current_organization_id(request, session)
+
+    if is_admin(request):
+        campaigns = session.exec(select(Campaign)).all()
+        contacts = session.exec(select(Contact)).all()
+        steps = session.exec(select(CadenceStep)).all()
+        drafts = session.exec(select(EmailDraft)).all()
+        organizations = session.exec(select(Organization)).all()
+        current_organization = None
+    else:
+        campaigns = session.exec(
+            select(Campaign).where(Campaign.organization_id == org_id)
+        ).all()
+
+        contacts = session.exec(
+            select(Contact).where(Contact.organization_id == org_id)
+        ).all()
+
+        steps = session.exec(
+            select(CadenceStep).where(CadenceStep.organization_id == org_id)
+        ).all()
+
+        drafts = session.exec(
+            select(EmailDraft).where(EmailDraft.organization_id == org_id)
+        ).all()
+
+        organizations = []
+        current_organization = session.get(Organization, org_id)
 
     campaign_rows = []
 
@@ -609,9 +941,17 @@ def dashboard(
         campaign_steps = [s for s in steps if s.campaign_id == campaign.id]
         campaign_drafts = [d for d in drafts if d.campaign_id == campaign.id]
 
+        organization = (
+            session.get(Organization, campaign.organization_id)
+            if campaign.organization_id
+            else None
+        )
+
         campaign_rows.append({
             "id": campaign.id,
             "name": campaign.name,
+            "workspace": organization.name if organization else "No workspace",
+            "sender_email": organization.sender_email if organization else "",
             "audience": campaign.audience,
             "offer": campaign.offer,
             "contacts": len(campaign_contacts),
@@ -639,6 +979,8 @@ def dashboard(
             "demo_mode": DEMO_MODE,
             "campaigns": campaign_rows,
             "analytics": analytics,
+            "organizations": organizations,
+            "current_organization": current_organization,
             "current_user": current_user_email(request),
             "is_admin": is_admin(request),
         },
@@ -655,11 +997,32 @@ def dashboard_create_campaign(
     name: str = Form(...),
     offer: str = Form(...),
     audience: str = Form("small businesses"),
+    organization_id: Optional[int] = Form(None),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
 
+    if is_admin(request):
+        final_organization_id = organization_id
+    else:
+        final_organization_id = get_current_organization_id(request, session)
+
+    if not final_organization_id:
+        return redirect_with_message(
+            "/dashboard",
+            "Create or select a workspace before creating a campaign.",
+        )
+
+    organization = session.get(Organization, final_organization_id)
+
+    if not organization:
+        return redirect_with_message(
+            "/dashboard",
+            "Workspace not found.",
+        )
+
     campaign = Campaign(
+        organization_id=final_organization_id,
         name=name,
         offer=offer,
         audience=audience or "small businesses",
@@ -684,7 +1047,23 @@ def campaign_detail(
 ):
     require_dashboard_login(request)
 
-    campaign, contacts, steps, draft_rows, stats = build_campaign_context(campaign_id, session)
+    campaign, contacts, steps, draft_rows, stats = build_campaign_context(
+        campaign_id,
+        request,
+        session,
+    )
+
+    organization = (
+        session.get(Organization, campaign.organization_id)
+        if campaign.organization_id
+        else None
+    )
+
+    sender_email = (
+        organization.sender_email
+        if organization and organization.sender_email
+        else DEFAULT_SES_FROM_EMAIL
+    )
 
     return templates.TemplateResponse(
         request=request,
@@ -693,6 +1072,8 @@ def campaign_detail(
             "message": message,
             "demo_mode": DEMO_MODE,
             "campaign": campaign,
+            "organization": organization,
+            "sender_email": sender_email,
             "contacts": contacts,
             "steps": steps,
             "drafts": draft_rows,
@@ -714,7 +1095,7 @@ def edit_campaign(
 ):
     require_dashboard_login(request)
 
-    campaign = get_campaign_or_404(campaign_id, session)
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
 
     campaign.name = name
     campaign.audience = audience or "small businesses"
@@ -749,9 +1130,10 @@ def add_campaign_step(
 ):
     require_dashboard_login(request)
 
-    campaign = get_campaign_or_404(campaign_id, session)
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
 
     step = CadenceStep(
+        organization_id=campaign.organization_id,
         campaign_id=campaign.id,
         step_number=step_number,
         send_day=send_day,
@@ -793,6 +1175,8 @@ def edit_campaign_step(
     if not step:
         raise HTTPException(status_code=404, detail="Email step not found.")
 
+    require_step_access(step, request, session)
+
     step.step_number = step_number
     step.send_day = send_day
     step.name = name
@@ -823,6 +1207,8 @@ def delete_campaign_step(
 
     if not step:
         raise HTTPException(status_code=404, detail="Email step not found.")
+
+    require_step_access(step, request, session)
 
     campaign_id = step.campaign_id
 
@@ -858,7 +1244,7 @@ async def upload_campaign_contacts(
 ):
     require_dashboard_login(request)
 
-    campaign = get_campaign_or_404(campaign_id, session)
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
 
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a CSV file.")
@@ -896,6 +1282,7 @@ async def upload_campaign_contacts(
             continue
 
         contact = Contact(
+            organization_id=campaign.organization_id,
             campaign_id=campaign_id,
             first_name=str(row.get("first_name", "")).strip() or "there",
             last_name=str(row.get("last_name", "")).strip() if "last_name" in df.columns else None,
@@ -930,17 +1317,23 @@ def dashboard_unsubscribe_contact(
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found.")
 
+    require_contact_access(contact, request, session)
+
     campaign_id = contact.campaign_id
 
     contact.unsubscribed = True
     contact.suppressed = True
 
     existing = session.exec(
-        select(Suppression).where(Suppression.email == contact.email)
+        select(Suppression).where(
+            Suppression.email == contact.email,
+            Suppression.organization_id == contact.organization_id,
+        )
     ).first()
 
     if not existing:
         suppression = Suppression(
+            organization_id=contact.organization_id,
             email=contact.email,
             reason="manual unsubscribe",
         )
@@ -970,7 +1363,7 @@ def import_hubspot_to_campaign(
 ):
     require_dashboard_login(request)
 
-    campaign = get_campaign_or_404(campaign_id, session)
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
 
     try:
         hubspot_data = get_hubspot_contacts(limit=limit)
@@ -1004,6 +1397,7 @@ def import_hubspot_to_campaign(
             continue
 
         contact = Contact(
+            organization_id=campaign.organization_id,
             campaign_id=campaign_id,
             first_name=(props.get("firstname") or "").strip() or "there",
             last_name=(props.get("lastname") or "").strip() or None,
@@ -1034,7 +1428,7 @@ def export_campaign_to_hubspot(
 ):
     require_dashboard_login(request)
 
-    campaign = get_campaign_or_404(campaign_id, session)
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
 
     contacts = session.exec(
         select(Contact).where(
@@ -1080,7 +1474,7 @@ def export_campaign_to_hubspot(
 
     return redirect_with_message(
         f"/dashboard/campaigns/{campaign_id}",
-        f"HubSpot export complete. Created {created}, updated {updated}, skipped {skipped}, failed {failed}.",
+        f"HubSpot export complete for {campaign.name}. Created {created}, updated {updated}, skipped {skipped}, failed {failed}.",
     )
 
 
@@ -1097,7 +1491,7 @@ def generate_campaign_drafts(
 ):
     require_dashboard_login(request)
 
-    campaign = get_campaign_or_404(campaign_id, session)
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
 
     contacts = session.exec(
         select(Contact).where(
@@ -1127,6 +1521,8 @@ def generate_campaign_drafts(
                 f"/dashboard/campaigns/{campaign_id}",
                 "Selected email step not found for this campaign.",
             )
+
+        require_step_access(selected_step, request, session)
 
         steps = [selected_step]
 
@@ -1185,6 +1581,7 @@ def generate_campaign_drafts(
             unsubscribe_line = f"\n\nIf this is not relevant, you can stop future emails here: {unsubscribe_url}"
 
             draft = EmailDraft(
+                organization_id=campaign.organization_id,
                 contact_id=contact.id,
                 campaign_id=campaign_id,
                 cadence_step_id=step.id,
@@ -1217,7 +1614,7 @@ def approve_all_campaign_drafts(
 ):
     require_dashboard_login(request)
 
-    campaign = get_campaign_or_404(campaign_id, session)
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
 
     drafts = session.exec(
         select(EmailDraft).where(
@@ -1250,7 +1647,7 @@ def approve_campaign_day(
 ):
     require_dashboard_login(request)
 
-    get_campaign_or_404(campaign_id, session)
+    get_campaign_or_404_for_user(campaign_id, request, session)
 
     drafts = session.exec(
         select(EmailDraft).where(
@@ -1288,6 +1685,8 @@ def approve_single_draft(
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found.")
 
+    require_draft_access(draft, request, session)
+
     if draft.sent:
         raise HTTPException(status_code=400, detail="Cannot approve a sent draft.")
 
@@ -1315,9 +1714,13 @@ def dashboard_edit_draft_page(
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found.")
 
+    require_draft_access(draft, request, session)
+
     contact = session.get(Contact, draft.contact_id)
     campaign = session.get(Campaign, draft.campaign_id)
     step = session.get(CadenceStep, draft.cadence_step_id) if draft.cadence_step_id else None
+
+    sender_email = get_sender_email_for_organization(draft.organization_id, session)
 
     return templates.TemplateResponse(
         request=request,
@@ -1327,6 +1730,7 @@ def dashboard_edit_draft_page(
             "contact": contact,
             "campaign": campaign,
             "step": step,
+            "sender_email": sender_email,
             "demo_mode": DEMO_MODE,
             "current_user": current_user_email(request),
             "is_admin": is_admin(request),
@@ -1348,6 +1752,8 @@ def dashboard_save_draft_edit(
 
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found.")
+
+    require_draft_access(draft, request, session)
 
     if draft.sent:
         raise HTTPException(status_code=400, detail="Cannot edit a sent draft.")
@@ -1378,6 +1784,8 @@ def send_single_draft(
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found.")
 
+    require_draft_access(draft, request, session)
+
     campaign_id = draft.campaign_id
 
     if not draft.approved:
@@ -1391,26 +1799,40 @@ def send_single_draft(
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found.")
 
+    require_contact_access(contact, request, session)
+
     if contact.unsubscribed or contact.suppressed:
         raise HTTPException(status_code=400, detail="Contact is unsubscribed or suppressed.")
 
     suppression = session.exec(
-        select(Suppression).where(Suppression.email == contact.email)
+        select(Suppression).where(
+            Suppression.email == contact.email,
+            Suppression.organization_id == contact.organization_id,
+        )
     ).first()
 
     if suppression:
         raise HTTPException(status_code=400, detail="Email is suppressed.")
 
+    sender_email = get_sender_email_for_organization(draft.organization_id, session)
+
+    if not sender_email:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing sender email. Add sender_email to the workspace or set SES_FROM_EMAIL.",
+        )
+
     safe_send_email(
         to_email=contact.email,
         subject=draft.subject,
         body=draft.body,
+        from_email=sender_email,
     )
 
     if DEMO_MODE:
         return redirect_with_message(
             f"/dashboard/campaigns/{campaign_id}",
-            "Demo mode is on. Email was previewed in logs but not sent.",
+            f"Demo mode is on. Email was previewed from {sender_email} but not sent.",
         )
 
     draft.sent = True
@@ -1421,7 +1843,7 @@ def send_single_draft(
 
     return redirect_with_message(
         f"/dashboard/campaigns/{campaign_id}",
-        "Email sent.",
+        f"Email sent from {sender_email}.",
     )
 
 
@@ -1431,12 +1853,19 @@ def send_campaign_day(
     request: Request,
     send_day: int = Form(...),
     max_send: int = Form(10),
-    dry_run: str = Form(None),
+    dry_run: Optional[str] = Form(None),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
 
-    get_campaign_or_404(campaign_id, session)
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+    sender_email = get_sender_email_for_organization(campaign.organization_id, session)
+
+    if not sender_email:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign_id}",
+            "Missing sender email. Add sender_email to the workspace or set SES_FROM_EMAIL.",
+        )
 
     drafts = session.exec(
         select(EmailDraft).where(
@@ -1466,7 +1895,10 @@ def send_campaign_day(
             continue
 
         suppression = session.exec(
-            select(Suppression).where(Suppression.email == contact.email)
+            select(Suppression).where(
+                Suppression.email == contact.email,
+                Suppression.organization_id == contact.organization_id,
+            )
         ).first()
 
         if suppression:
@@ -1476,6 +1908,7 @@ def send_campaign_day(
         try:
             if dry_run or DEMO_MODE:
                 print("\nDRY RUN / DEMO MODE - Email not sent")
+                print(f"From: {sender_email}")
                 print(f"To: {contact.email}")
                 print(f"Subject: {draft.subject}")
                 print(draft.body)
@@ -1486,6 +1919,7 @@ def send_campaign_day(
                     to_email=contact.email,
                     subject=draft.subject,
                     body=draft.body,
+                    from_email=sender_email,
                 )
 
                 draft.sent = True
@@ -1500,11 +1934,11 @@ def send_campaign_day(
     session.commit()
 
     if DEMO_MODE:
-        message = f"Demo mode is on. Previewed {previewed_count} emails for Day {send_day}. Nothing was sent."
+        message = f"Demo mode is on. Previewed {previewed_count} emails from {sender_email} for Day {send_day}. Nothing was sent."
     elif dry_run:
-        message = f"Dry run complete. Previewed {previewed_count} emails for Day {send_day}. Nothing was sent."
+        message = f"Dry run complete. Previewed {previewed_count} emails from {sender_email} for Day {send_day}. Nothing was sent."
     else:
-        message = f"Sent {sent_count} emails for Day {send_day}. Skipped {skipped_count}."
+        message = f"Sent {sent_count} emails from {sender_email} for Day {send_day}. Skipped {skipped_count}."
 
     if errors:
         message += f" Errors: {len(errors)}. Check logs."
@@ -1520,7 +1954,17 @@ def send_campaign_day(
 # ------------------------------------------------------------
 
 @app.post("/campaigns")
-def create_campaign(campaign: Campaign, session: Session = Depends(get_session)):
+def create_campaign(
+    campaign: Campaign,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    if not is_admin(request):
+        org_id = get_current_organization_id(request, session)
+        campaign.organization_id = org_id
+
     session.add(campaign)
     session.commit()
     session.refresh(campaign)
@@ -1528,36 +1972,84 @@ def create_campaign(campaign: Campaign, session: Session = Depends(get_session))
 
 
 @app.get("/campaigns", response_model=List[Campaign])
-def list_campaigns(session: Session = Depends(get_session)):
-    return session.exec(select(Campaign)).all()
+def list_campaigns(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    if is_admin(request):
+        return session.exec(select(Campaign)).all()
+
+    org_id = get_current_organization_id(request, session)
+
+    return session.exec(
+        select(Campaign).where(Campaign.organization_id == org_id)
+    ).all()
 
 
 @app.get("/contacts", response_model=List[Contact])
-def list_contacts(session: Session = Depends(get_session)):
-    return session.exec(select(Contact)).all()
+def list_contacts(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    if is_admin(request):
+        return session.exec(select(Contact)).all()
+
+    org_id = get_current_organization_id(request, session)
+
+    return session.exec(
+        select(Contact).where(Contact.organization_id == org_id)
+    ).all()
 
 
 @app.get("/cadence-steps", response_model=List[CadenceStep])
-def list_cadence_steps(session: Session = Depends(get_session)):
-    return session.exec(select(CadenceStep)).all()
+def list_cadence_steps(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    if is_admin(request):
+        return session.exec(select(CadenceStep)).all()
+
+    org_id = get_current_organization_id(request, session)
+
+    return session.exec(
+        select(CadenceStep).where(CadenceStep.organization_id == org_id)
+    ).all()
 
 
 @app.post("/suppressions")
 def add_suppression(
     suppression: Suppression,
+    request: Request,
     session: Session = Depends(get_session),
 ):
+    require_dashboard_login(request)
+
+    if not is_admin(request):
+        suppression.organization_id = get_current_organization_id(request, session)
+
     suppression.email = suppression.email.strip().lower()
 
     existing = session.exec(
-        select(Suppression).where(Suppression.email == suppression.email)
+        select(Suppression).where(
+            Suppression.email == suppression.email,
+            Suppression.organization_id == suppression.organization_id,
+        )
     ).first()
 
     if existing:
         return existing
 
     contact = session.exec(
-        select(Contact).where(Contact.email == suppression.email)
+        select(Contact).where(
+            Contact.email == suppression.email,
+            Contact.organization_id == suppression.organization_id,
+        )
     ).first()
 
     if contact:
@@ -1574,5 +2066,26 @@ def add_suppression(
 
 
 @app.get("/suppressions", response_model=List[Suppression])
-def list_suppressions(session: Session = Depends(get_session)):
-    return session.exec(select(Suppression)).all()
+def list_suppressions(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    if is_admin(request):
+        return session.exec(select(Suppression)).all()
+
+    org_id = get_current_organization_id(request, session)
+
+    return session.exec(
+        select(Suppression).where(Suppression.organization_id == org_id)
+    ).all()
+
+
+@app.get("/organizations", response_model=List[Organization])
+def list_organizations(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_admin_login(request)
+    return session.exec(select(Organization)).all()

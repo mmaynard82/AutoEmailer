@@ -12,153 +12,257 @@
         }
 
         .topbar {
-            background: #1f2937;
+            background: #111827;
             color: white;
-            padding: 18px 30px;
+            padding: 16px 28px;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
+        }
+
+        .topbar h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .topbar .right {
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
         }
 
         .topbar a {
             color: white;
             text-decoration: none;
+            font-weight: bold;
         }
 
         .container {
-            max-width: 1250px;
-            margin: 30px auto;
-            padding: 0 20px;
+            padding: 28px;
+            max-width: 1300px;
+            margin: 0 auto;
         }
 
-        .stats {
+        .message {
+            background: #ecfdf5;
+            border-left: 5px solid #047857;
+            padding: 12px 14px;
+            margin-bottom: 18px;
+            border-radius: 6px;
+        }
+
+        .demo {
+            background: #fff7ed;
+            border-left: 5px solid #f97316;
+            padding: 12px 14px;
+            margin-bottom: 18px;
+            border-radius: 6px;
+            color: #92400e;
+        }
+
+        .workspace-banner {
+            background: #eff6ff;
+            border-left: 5px solid #2563eb;
+            padding: 12px 14px;
+            margin-bottom: 18px;
+            border-radius: 6px;
+            color: #1e3a8a;
+        }
+
+        .mini-links {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+
+        .grid {
             display: grid;
-            grid-template-columns: repeat(6, minmax(0, 1fr));
-            gap: 12px;
-            margin-bottom: 20px;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 14px;
+            margin-bottom: 22px;
         }
 
         .stat {
             background: white;
-            padding: 16px;
-            border-radius: 10px;
-            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
-        }
-
-        .stat .number {
-            font-size: 24px;
-            font-weight: bold;
+            border-radius: 12px;
+            padding: 18px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.08);
         }
 
         .stat .label {
             color: #666;
             font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .stat .value {
+            font-size: 28px;
+            font-weight: bold;
         }
 
         .card {
             background: white;
-            border-radius: 10px;
+            border-radius: 12px;
             padding: 22px;
-            margin-bottom: 20px;
-            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            margin-bottom: 22px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.08);
         }
 
-        h1, h2, h3 {
+        h2 {
+            margin-top: 0;
+            font-size: 20px;
+        }
+
+        h3 {
             margin-top: 0;
         }
 
         label {
             display: block;
             font-weight: bold;
-            margin-top: 12px;
-            margin-bottom: 5px;
+            margin-top: 14px;
+            margin-bottom: 6px;
         }
 
-        input, textarea {
+        input, textarea, select {
             width: 100%;
-            padding: 10px;
             box-sizing: border-box;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 7px;
             font-size: 14px;
         }
 
         textarea {
-            min-height: 110px;
+            min-height: 85px;
+            resize: vertical;
         }
 
-        button, .button-link {
-            margin-top: 14px;
-            padding: 10px 14px;
+        button, .button {
+            display: inline-block;
             background: #1f5eff;
             color: white;
             border: none;
-            border-radius: 6px;
+            border-radius: 7px;
+            padding: 9px 13px;
+            font-size: 14px;
             font-weight: bold;
-            cursor: pointer;
-            display: inline-block;
             text-decoration: none;
+            cursor: pointer;
         }
 
-        .button-link.secondary {
+        .button.secondary, button.secondary {
             background: #374151;
         }
 
-        .message {
-            background: #ecfdf5;
-            border-left: 5px solid #047857;
-            padding: 12px;
-            margin-bottom: 20px;
+        .button.light, button.light {
+            background: #e5e7eb;
+            color: #111827;
         }
 
-        .warning-box {
-            background: #fff7ed;
-            border-left: 5px solid #f97316;
-            padding: 12px;
-            margin-bottom: 20px;
+        .button.green, button.green {
+            background: #047857;
         }
 
-        .demo {
-            background: #fef2f2;
-            color: #991b1b;
-            padding: 6px 10px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: bold;
+        .button.orange, button.orange {
+            background: #ea580c;
         }
 
-        .live {
-            background: #ecfdf5;
-            color: #047857;
-            padding: 6px 10px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: bold;
+        .button.red, button.red {
+            background: #b91c1c;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        th, td {
-            border-bottom: 1px solid #e5e7eb;
-            padding: 9px;
-            vertical-align: top;
-            text-align: left;
+            font-size: 14px;
         }
 
         th {
+            text-align: left;
             background: #f3f4f6;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
         }
 
-        .small {
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+
+        .muted {
             color: #666;
             font-size: 13px;
+            line-height: 1.45;
         }
 
-        @media (max-width: 950px) {
-            .stats {
+        .empty {
+            color: #666;
+            padding: 18px 0;
+        }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 7px;
+            border-radius: 999px;
+            font-size: 12px;
+            background: #e5e7eb;
+            color: #374151;
+            font-weight: bold;
+        }
+
+        .badge.admin {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge.pilot {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        code {
+            background: #f3f4f6;
+            padding: 2px 5px;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 1000px) {
+            .grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .two-col {
                 grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 650px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .topbar {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
             }
         }
     </style>
@@ -166,16 +270,19 @@
 <body>
 
 <div class="topbar">
-    <div>
-        <strong>AI Emailer Dashboard</strong>
-    </div>
-    <div>
-        {% if demo_mode %}
-            <span class="demo">DEMO MODE</span>
+    <h1>AI Emailer Dashboard</h1>
+
+    <div class="right">
+        {% if is_admin %}
+            <span class="badge admin">Admin</span>
         {% else %}
-            <span class="live">LIVE SENDING</span>
+            <span class="badge pilot">Pilot User</span>
         {% endif %}
-        &nbsp;&nbsp;
+
+        {% if current_user %}
+            <span>Logged in as {{ current_user }}</span>
+        {% endif %}
+
         <a href="/logout">Logout</a>
     </div>
 </div>
@@ -187,103 +294,235 @@
     {% endif %}
 
     {% if demo_mode %}
-        <div class="warning-box">
-            Demo mode is on. Emails will preview in logs but will not actually send.
+        <div class="demo">
+            Demo mode is currently on. Emails will preview in logs but will not actually send.
         </div>
     {% endif %}
 
-    <div class="warning-box">
-        Use only test contacts or contacts you are authorized to contact. Do not upload purchased, scraped, or unauthorized lists.
-    </div>
+    {% if is_admin %}
+        <div class="workspace-banner">
+            Admin view: you can see all workspaces and campaigns.
+        </div>
+    {% elif current_organization %}
+        <div class="workspace-banner">
+            Workspace: {{ current_organization.name }}
+        </div>
+    {% endif %}
 
-    <div class="stats">
+    {% if is_admin %}
+        <div class="mini-links">
+            <a class="button secondary" href="/admin/workspaces/new">Create Workspace</a>
+            <a class="button secondary" href="/admin/pilot-users/new">Create Pilot User</a>
+            <a class="button light" href="/organizations">View Workspaces API</a>
+        </div>
+    {% endif %}
+
+    <div class="grid">
         <div class="stat">
-            <div class="number">{{ analytics.total_campaigns }}</div>
             <div class="label">Campaigns</div>
+            <div class="value">{{ analytics.total_campaigns }}</div>
         </div>
+
         <div class="stat">
-            <div class="number">{{ analytics.total_contacts }}</div>
             <div class="label">Contacts</div>
+            <div class="value">{{ analytics.total_contacts }}</div>
         </div>
+
         <div class="stat">
-            <div class="number">{{ analytics.total_steps }}</div>
             <div class="label">Email Steps</div>
+            <div class="value">{{ analytics.total_steps }}</div>
         </div>
+
         <div class="stat">
-            <div class="number">{{ analytics.total_drafts }}</div>
             <div class="label">Drafts</div>
+            <div class="value">{{ analytics.total_drafts }}</div>
         </div>
+
         <div class="stat">
-            <div class="number">{{ analytics.approved_drafts }}</div>
             <div class="label">Approved</div>
+            <div class="value">{{ analytics.approved_drafts }}</div>
         </div>
+
         <div class="stat">
-            <div class="number">{{ analytics.sent_drafts }}</div>
             <div class="label">Sent</div>
+            <div class="value">{{ analytics.sent_drafts }}</div>
         </div>
     </div>
 
-    <div class="card">
-        <h2>Create New Campaign</h2>
-        <p class="small">
-            Create the campaign first. Then open it to add contacts, email steps, drafts, approvals, and sending controls.
-        </p>
+    <div class="two-col">
+        <div class="card">
+            <h2>Create Campaign</h2>
 
-        <form method="post" action="/dashboard/campaigns">
-            <label>Campaign Name</label>
-            <input type="text" name="name" required placeholder="Real Estate CRM Health Check">
+            {% if is_admin and not organizations %}
+                <p class="empty">
+                    Create a workspace first before creating a campaign.
+                </p>
 
-            <label>Audience</label>
-            <input type="text" name="audience" value="small businesses">
+                <a class="button secondary" href="/admin/workspaces/new">Create Workspace</a>
+            {% else %}
+                <form method="post" action="/dashboard/campaigns">
 
-            <label>Offer</label>
-            <textarea name="offer" required>We help small businesses clean up their CRM and improve follow-up.</textarea>
+                    {% if is_admin %}
+                        <label>Workspace</label>
+                        <select name="organization_id" required>
+                            <option value="">Select workspace</option>
 
-            <button type="submit">Create Campaign</button>
-        </form>
+                            {% for organization in organizations %}
+                                <option value="{{ organization.id }}">
+                                    {{ organization.name }}
+                                    {% if organization.sender_email %}
+                                        — {{ organization.sender_email }}
+                                    {% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+
+                        <p class="muted">
+                            Need a workspace?
+                            <a href="/admin/workspaces/new">Create one here</a>.
+                        </p>
+                    {% endif %}
+
+                    <label>Campaign Name</label>
+                    <input
+                        type="text"
+                        name="name"
+                        required
+                        placeholder="Example: Colorado Manufacturers Outreach"
+                    >
+
+                    <label>Audience</label>
+                    <input
+                        type="text"
+                        name="audience"
+                        value="small businesses"
+                        placeholder="Example: Colorado manufacturers"
+                    >
+
+                    <label>Offer</label>
+                    <textarea
+                        name="offer"
+                        required
+                        placeholder="Example: We help manufacturers clean up CRM follow-up, uncover missed revenue, and improve sales visibility."
+                    ></textarea>
+
+                    <button type="submit">Create Campaign</button>
+                </form>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>How to Use</h2>
+
+            <p class="muted">
+                Recommended pilot workflow:
+            </p>
+
+            <ol>
+                {% if is_admin %}
+                    <li>Create a workspace for the pilot/client.</li>
+                    <li>Add the sender email for that workspace.</li>
+                    <li>Create a pilot user and assign them to that workspace.</li>
+                    <li>Create a campaign under the correct workspace.</li>
+                {% else %}
+                    <li>Create a campaign in your assigned workspace.</li>
+                {% endif %}
+                <li>Open the campaign workspace.</li>
+                <li>Add at least one email step.</li>
+                <li>Upload a CSV of contacts.</li>
+                <li>Generate drafts.</li>
+                <li>Review, edit, and approve drafts.</li>
+                <li>Preview or send when ready.</li>
+            </ol>
+
+            <p class="muted">
+                CSV headers should include:
+            </p>
+
+            <p class="muted">
+                <code>first_name,last_name,email,company,industry,role,website</code>
+            </p>
+
+            {% if is_admin %}
+                <p class="muted">
+                    Sender emails are set at the workspace level. Each workspace can send from a different AWS SES verified sender.
+                </p>
+            {% endif %}
+        </div>
     </div>
 
     <div class="card">
         <h2>Campaigns</h2>
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Campaign</th>
-                    <th>Audience</th>
-                    <th>Contacts</th>
-                    <th>Steps</th>
-                    <th>Drafts</th>
-                    <th>Approved</th>
-                    <th>Sent</th>
-                    <th>Unapproved</th>
-                    <th>Open</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for campaign in campaigns %}
+        {% if campaigns %}
+            <table>
+                <thead>
                     <tr>
-                        <td>
-                            <strong>{{ campaign.name }}</strong><br>
-                            <span class="small">{{ campaign.offer }}</span>
-                        </td>
-                        <td>{{ campaign.audience }}</td>
-                        <td>{{ campaign.contacts }}</td>
-                        <td>{{ campaign.steps }}</td>
-                        <td>{{ campaign.drafts }}</td>
-                        <td>{{ campaign.approved }}</td>
-                        <td>{{ campaign.sent }}</td>
-                        <td>{{ campaign.unapproved }}</td>
-                        <td>
-                            <a class="button-link secondary" href="/dashboard/campaigns/{{ campaign.id }}">Open Campaign</a>
-                        </td>
+                        {% if is_admin %}
+                            <th>Workspace</th>
+                            <th>Sender</th>
+                        {% endif %}
+                        <th>Campaign</th>
+                        <th>Audience</th>
+                        <th>Contacts</th>
+                        <th>Steps</th>
+                        <th>Drafts</th>
+                        <th>Approved</th>
+                        <th>Sent</th>
+                        <th>Needs Review</th>
+                        <th>Action</th>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                </thead>
 
-        {% if not campaigns %}
-            <p class="small">No campaigns yet. Create your first campaign above.</p>
+                <tbody>
+                    {% for campaign in campaigns %}
+                        <tr>
+                            {% if is_admin %}
+                                <td>{{ campaign.workspace }}</td>
+                                <td>
+                                    {% if campaign.sender_email %}
+                                        {{ campaign.sender_email }}
+                                    {% else %}
+                                        <span class="muted">No sender set</span>
+                                    {% endif %}
+                                </td>
+                            {% endif %}
+
+                            <td>
+                                <strong>{{ campaign.name }}</strong>
+                                <div class="muted">
+                                    {{ campaign.offer[:120] }}{% if campaign.offer|length > 120 %}...{% endif %}
+                                </div>
+                            </td>
+
+                            <td>{{ campaign.audience }}</td>
+                            <td>{{ campaign.contacts }}</td>
+                            <td>{{ campaign.steps }}</td>
+                            <td>{{ campaign.drafts }}</td>
+                            <td>{{ campaign.approved }}</td>
+                            <td>{{ campaign.sent }}</td>
+                            <td>{{ campaign.unapproved }}</td>
+
+                            <td>
+                                <div class="actions">
+                                    <a class="button" href="/dashboard/campaigns/{{ campaign.id }}">
+                                        Open Campaign
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="empty">
+                No campaigns yet.
+                {% if is_admin %}
+                    Create a workspace first, then create your first campaign.
+                {% else %}
+                    Create your first campaign to get started.
+                {% endif %}
+            </p>
         {% endif %}
     </div>
 

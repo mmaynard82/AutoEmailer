@@ -3,9 +3,39 @@ from datetime import datetime
 from sqlmodel import SQLModel, Field
 
 
+class Organization(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    name: str = Field(index=True)
+    notes: Optional[str] = None
+
+    # Sender used for this workspace's campaigns.
+    # Example: evan.burns@mail.evolutioncrm.us
+    sender_email: Optional[str] = None
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AppUser(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    organization_id: Optional[int] = Field(default=None, index=True)
+
+    email: str = Field(index=True, unique=True)
+    password_hash: str
+
+    name: Optional[str] = None
+    role: str = "pilot"
+
+    is_active: bool = True
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class Contact(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
+    organization_id: Optional[int] = Field(default=None, index=True)
     campaign_id: Optional[int] = Field(default=None, index=True)
 
     first_name: str
@@ -26,6 +56,8 @@ class Contact(SQLModel, table=True):
 class Campaign(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
+    organization_id: Optional[int] = Field(default=None, index=True)
+
     name: str
     offer: str
     audience: str = "small businesses"
@@ -36,6 +68,7 @@ class Campaign(SQLModel, table=True):
 class CadenceStep(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
+    organization_id: Optional[int] = Field(default=None, index=True)
     campaign_id: int = Field(index=True)
 
     step_number: int
@@ -49,7 +82,7 @@ class CadenceStep(SQLModel, table=True):
     template_subject: Optional[str] = "Quick question for {{ company }}"
     template_body: Optional[str] = """Hi {{ first_name }},
 
-{{ personal_line }}
+{{ intro_para }}
 
 I’m reaching out because we help {{ audience }} improve CRM follow-up, sales visibility, and client communication.
 
@@ -65,6 +98,8 @@ Evolution CRM"""
 
 class EmailDraft(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+
+    organization_id: Optional[int] = Field(default=None, index=True)
 
     contact_id: int = Field(index=True)
     campaign_id: int = Field(index=True)
@@ -86,19 +121,9 @@ class EmailDraft(SQLModel, table=True):
 class Suppression(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    email: str = Field(index=True, unique=True)
+    organization_id: Optional[int] = Field(default=None, index=True)
+
+    email: str = Field(index=True)
     reason: str
-
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-class AppUser(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-
-    email: str = Field(index=True, unique=True)
-    password_hash: str
-
-    name: Optional[str] = None
-    role: str = "pilot"
-
-    is_active: bool = True
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
