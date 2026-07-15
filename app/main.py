@@ -33,6 +33,7 @@ from app.hubspot_client import (
 
 
 load_dotenv()
+load_dotenv("/etc/secrets/.env")
 
 app = FastAPI(title="AI Emailer MVP")
 

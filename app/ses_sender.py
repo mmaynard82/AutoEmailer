@@ -3,13 +3,17 @@ import boto3
 from dotenv import load_dotenv
 
 load_dotenv()
+load_dotenv("/etc/secrets/.env")
 
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+
 AWS_SECRET_ACCESS_KEY = (
     os.getenv("AWS_SECRET_ACCESS_KEY")
     or os.getenv("AWS_SECRET_KEY_FOR_SES")
+    or os.getenv("SES_SECRET_KEY")
 )
+
 DEFAULT_SES_FROM_EMAIL = os.getenv("SES_FROM_EMAIL")
 
 
@@ -20,7 +24,7 @@ def get_ses_client():
         missing.append("AWS_ACCESS_KEY_ID")
 
     if not AWS_SECRET_ACCESS_KEY:
-        missing.append("AWS_SECRET_ACCESS_KEY or AWS_SECRET_KEY_FOR_SES")
+        missing.append("AWS_SECRET_ACCESS_KEY, AWS_SECRET_KEY_FOR_SES, or SES_SECRET_KEY")
 
     if not AWS_REGION:
         missing.append("AWS_REGION")
