@@ -6,7 +6,10 @@ load_dotenv()
 
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_SECRET_ACCESS_KEY = (
+    os.getenv("AWS_SECRET_ACCESS_KEY")
+    or os.getenv("AWS_SECRET_KEY_FOR_SES")
+)
 DEFAULT_SES_FROM_EMAIL = os.getenv("SES_FROM_EMAIL")
 
 
@@ -17,7 +20,7 @@ def get_ses_client():
         missing.append("AWS_ACCESS_KEY_ID")
 
     if not AWS_SECRET_ACCESS_KEY:
-        missing.append("AWS_SECRET_ACCESS_KEY")
+        missing.append("AWS_SECRET_ACCESS_KEY or AWS_SECRET_KEY_FOR_SES")
 
     if not AWS_REGION:
         missing.append("AWS_REGION")
@@ -42,18 +45,6 @@ def send_email_via_ses(
     from_email: str | None = None,
     reply_to_email: str | None = None,
 ) -> dict:
-    """
-    Sends email through AWS SES.
-
-    Visible From:
-    - Uses from_email if provided.
-    - Falls back to SES_FROM_EMAIL from Render/local env.
-
-    Reply-To:
-    - Uses reply_to_email if provided.
-    - Otherwise replies go to the visible sender.
-    """
-
     sender = from_email or DEFAULT_SES_FROM_EMAIL
 
     if not sender:
