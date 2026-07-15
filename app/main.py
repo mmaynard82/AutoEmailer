@@ -51,10 +51,6 @@ def on_startup():
     create_db_and_tables()
 
 
-# ------------------------------------------------------------
-# Redirect Helper
-# ------------------------------------------------------------
-
 def redirect_with_message(url: str, message: str):
     separator = "&" if "?" in url else "?"
     return RedirectResponse(
@@ -62,10 +58,6 @@ def redirect_with_message(url: str, message: str):
         status_code=303,
     )
 
-
-# ------------------------------------------------------------
-# Auth Helpers
-# ------------------------------------------------------------
 
 def make_auth_token() -> str:
     message = ADMIN_PASSWORD.encode("utf-8")
@@ -102,10 +94,6 @@ def require_admin_login(request: Request):
     if not is_admin(request):
         raise HTTPException(status_code=403, detail="Admin access required.")
 
-
-# ------------------------------------------------------------
-# Workspace / Organization Helpers
-# ------------------------------------------------------------
 
 def get_current_app_user(
     request: Request,
@@ -222,10 +210,6 @@ def get_sender_email_for_organization(
     return DEFAULT_SES_FROM_EMAIL
 
 
-# ------------------------------------------------------------
-# HubSpot Helper
-# ------------------------------------------------------------
-
 def safe_update_hubspot_dnc(email: str):
     if not email:
         return {
@@ -245,10 +229,6 @@ def safe_update_hubspot_dnc(email: str):
         }
 
 
-# ------------------------------------------------------------
-# Unsubscribe Helpers
-# ------------------------------------------------------------
-
 def make_unsubscribe_token(contact_id: int, email: str) -> str:
     message = f"{contact_id}:{email.lower()}".encode("utf-8")
     secret = SECRET_KEY.encode("utf-8")
@@ -264,10 +244,6 @@ def build_unsubscribe_url(contact: Contact) -> str:
     token = make_unsubscribe_token(contact.id, contact.email)
     return f"{APP_BASE_URL}/unsubscribe/{contact.id}/{token}"
 
-
-# ------------------------------------------------------------
-# Login / Logout
-# ------------------------------------------------------------
 
 @app.get("/login")
 def login_page(request: Request):
@@ -371,10 +347,6 @@ def logout():
     response.delete_cookie("ai_emailer_user")
     return response
 
-
-# ------------------------------------------------------------
-# Admin Workspace Management
-# ------------------------------------------------------------
 
 @app.get("/admin/workspaces/new", response_class=HTMLResponse)
 def new_workspace_page(
@@ -495,10 +467,6 @@ def create_workspace(
         f"Workspace created: {workspace.name}. Sender: {workspace.sender_email}.",
     )
 
-
-# ------------------------------------------------------------
-# Admin Pilot User Management
-# ------------------------------------------------------------
 
 @app.get("/admin/pilot-users/new", response_class=HTMLResponse)
 def new_pilot_user_page(
@@ -656,10 +624,6 @@ def create_pilot_user(
     )
 
 
-# ------------------------------------------------------------
-# Public Routes
-# ------------------------------------------------------------
-
 @app.get("/")
 def home(request: Request):
     dashboard_link = "/dashboard" if is_logged_in(request) else "/login"
@@ -700,6 +664,7 @@ def debug_aws_env(request: Request):
     secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
     fallback_secret_key = os.getenv("AWS_SECRET_KEY_FOR_SES")
     ses_secret_key = os.getenv("SES_SECRET_KEY")
+    test_render_secret = os.getenv("TEST_RENDER_SECRET")
     region = os.getenv("AWS_REGION")
     sender = os.getenv("SES_FROM_EMAIL")
 
@@ -712,6 +677,8 @@ def debug_aws_env(request: Request):
         "AWS_SECRET_KEY_FOR_SES_length": len(fallback_secret_key) if fallback_secret_key else 0,
         "SES_SECRET_KEY_present": bool(ses_secret_key),
         "SES_SECRET_KEY_length": len(ses_secret_key) if ses_secret_key else 0,
+        "TEST_RENDER_SECRET_present": bool(test_render_secret),
+        "TEST_RENDER_SECRET_value": test_render_secret,
         "AWS_REGION": region,
         "SES_FROM_EMAIL": sender,
     }
@@ -790,10 +757,6 @@ def unsubscribe_via_link(
     )
 
 
-# ------------------------------------------------------------
-# Send Helper
-# ------------------------------------------------------------
-
 def safe_send_email(
     to_email: str,
     subject: str,
@@ -833,10 +796,6 @@ def safe_send_email(
         "response": response,
     }
 
-
-# ------------------------------------------------------------
-# Campaign Context Helper
-# ------------------------------------------------------------
 
 def build_campaign_context(
     campaign_id: int,
@@ -902,10 +861,6 @@ def build_campaign_context(
 
     return campaign, contacts, steps, draft_rows, stats
 
-
-# ------------------------------------------------------------
-# Dashboard
-# ------------------------------------------------------------
 
 @app.get("/dashboard")
 def dashboard(
@@ -996,10 +951,6 @@ def dashboard(
         },
     )
 
-
-# ------------------------------------------------------------
-# Campaign Routes
-# ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns")
 def dashboard_create_campaign(
@@ -1120,10 +1071,6 @@ def edit_campaign(
     )
 
 
-# ------------------------------------------------------------
-# Email Step Routes
-# ------------------------------------------------------------
-
 @app.post("/dashboard/campaigns/{campaign_id}/steps")
 def add_campaign_step(
     campaign_id: int,
@@ -1241,10 +1188,6 @@ def delete_campaign_step(
     )
 
 
-# ------------------------------------------------------------
-# Contact Routes
-# ------------------------------------------------------------
-
 @app.post("/dashboard/campaigns/{campaign_id}/contacts/upload")
 async def upload_campaign_contacts(
     campaign_id: int,
@@ -1359,10 +1302,6 @@ def dashboard_unsubscribe_contact(
         "Contact unsubscribed, suppressed, and HubSpot DNC update attempted.",
     )
 
-
-# ------------------------------------------------------------
-# HubSpot Routes
-# ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns/{campaign_id}/hubspot/import")
 def import_hubspot_to_campaign(
@@ -1486,10 +1425,6 @@ def export_campaign_to_hubspot(
         f"HubSpot export complete for {campaign.name}. Created {created}, updated {updated}, skipped {skipped}, failed {failed}.",
     )
 
-
-# ------------------------------------------------------------
-# Draft Routes
-# ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns/{campaign_id}/drafts/generate")
 def generate_campaign_drafts(
@@ -1971,10 +1906,6 @@ def send_campaign_day(
         message,
     )
 
-
-# ------------------------------------------------------------
-# Basic API Endpoints
-# ------------------------------------------------------------
 
 @app.post("/campaigns")
 def create_campaign(
