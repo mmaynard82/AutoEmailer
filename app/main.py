@@ -125,10 +125,6 @@ def get_current_organization_id(
     request: Request,
     session: Session,
 ) -> Optional[int]:
-    """
-    Admin returns None, meaning access to all workspaces.
-    Pilot users return their assigned organization_id.
-    """
     if is_admin(request):
         return None
 
@@ -217,11 +213,6 @@ def get_sender_email_for_organization(
     organization_id: Optional[int],
     session: Session,
 ) -> Optional[str]:
-    """
-    Sender priority:
-    1. Organization sender_email
-    2. SES_FROM_EMAIL fallback from env
-    """
     if organization_id:
         organization = session.get(Organization, organization_id)
 
@@ -236,10 +227,6 @@ def get_sender_email_for_organization(
 # ------------------------------------------------------------
 
 def safe_update_hubspot_dnc(email: str):
-    """
-    Updates HubSpot contact status to DNC, but does not break unsubscribe
-    if HubSpot is unavailable, missing the contact, or misconfigured.
-    """
     if not email:
         return {
             "status": "skipped",
@@ -304,12 +291,6 @@ def login_submit(
     password: str = Form(...),
     session: Session = Depends(get_session),
 ):
-    """
-    Allows two login paths:
-    1. Admin login using ADMIN_PASSWORD. Email can be blank.
-    2. Pilot login using AppUser email/password.
-    """
-
     if password == ADMIN_PASSWORD:
         response = RedirectResponse(url="/dashboard", status_code=303)
         response.set_cookie(
@@ -708,6 +689,28 @@ def health_check():
     return {
         "status": "ok",
         "demo_mode": DEMO_MODE,
+    }
+
+
+@app.get("/debug/aws-env")
+def debug_aws_env(request: Request):
+    require_admin_login(request)
+
+    access_key = os.getenv("AWS_ACCESS_KEY_ID")
+    secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+    fallback_secret_key = os.getenv("AWS_SECRET_KEY_FOR_SES")
+    region = os.getenv("AWS_REGION")
+    sender = os.getenv("SES_FROM_EMAIL")
+
+    return {
+        "AWS_ACCESS_KEY_ID_present": bool(access_key),
+        "AWS_ACCESS_KEY_ID_starts_with": access_key[:4] if access_key else None,
+        "AWS_SECRET_ACCESS_KEY_present": bool(secret_key),
+        "AWS_SECRET_ACCESS_KEY_length": len(secret_key) if secret_key else 0,
+        "AWS_SECRET_KEY_FOR_SES_present": bool(fallback_secret_key),
+        "AWS_SECRET_KEY_FOR_SES_length": len(fallback_secret_key) if fallback_secret_key else 0,
+        "AWS_REGION": region,
+        "SES_FROM_EMAIL": sender,
     }
 
 
