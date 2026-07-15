@@ -450,7 +450,7 @@ def new_workspace_page(
                         <input type="text" name="name" required placeholder="Example: Evan Burns Pilot">
 
                         <label>Sender Email</label>
-                        <input type="email" name="sender_email" required placeholder="mmaynard@evolutioncrm.us">
+                        <input type="email" name="sender_email" required placeholder="mmaynard@mail.evolutioncrm.us">
 
                         <p class="muted">
                             This is the visible From address used by AWS SES for this workspace.
@@ -699,6 +699,7 @@ def debug_aws_env(request: Request):
     access_key = os.getenv("AWS_ACCESS_KEY_ID")
     secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
     fallback_secret_key = os.getenv("AWS_SECRET_KEY_FOR_SES")
+    ses_secret_key = os.getenv("SES_SECRET_KEY")
     region = os.getenv("AWS_REGION")
     sender = os.getenv("SES_FROM_EMAIL")
 
@@ -709,6 +710,8 @@ def debug_aws_env(request: Request):
         "AWS_SECRET_ACCESS_KEY_length": len(secret_key) if secret_key else 0,
         "AWS_SECRET_KEY_FOR_SES_present": bool(fallback_secret_key),
         "AWS_SECRET_KEY_FOR_SES_length": len(fallback_secret_key) if fallback_secret_key else 0,
+        "SES_SECRET_KEY_present": bool(ses_secret_key),
+        "SES_SECRET_KEY_length": len(ses_secret_key) if ses_secret_key else 0,
         "AWS_REGION": region,
         "SES_FROM_EMAIL": sender,
     }
