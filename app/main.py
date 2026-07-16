@@ -33,7 +33,6 @@ from app.hubspot_client import (
 
 
 load_dotenv()
-load_dotenv("/etc/secrets/.env")
 
 app = FastAPI(title="AI Emailer MVP")
 
@@ -52,6 +51,10 @@ def on_startup():
     create_db_and_tables()
 
 
+# ------------------------------------------------------------
+# Redirect Helper
+# ------------------------------------------------------------
+
 def redirect_with_message(url: str, message: str):
     separator = "&" if "?" in url else "?"
     return RedirectResponse(
@@ -59,6 +62,10 @@ def redirect_with_message(url: str, message: str):
         status_code=303,
     )
 
+
+# ------------------------------------------------------------
+# Auth Helpers
+# ------------------------------------------------------------
 
 def make_auth_token() -> str:
     message = ADMIN_PASSWORD.encode("utf-8")
@@ -96,6 +103,10 @@ def require_admin_login(request: Request):
         raise HTTPException(status_code=403, detail="Admin access required.")
 
 
+# ------------------------------------------------------------
+# Workspace / Organization Helpers
+# ------------------------------------------------------------
+
 def get_current_app_user(
     request: Request,
     session: Session,
@@ -114,6 +125,10 @@ def get_current_organization_id(
     request: Request,
     session: Session,
 ) -> Optional[int]:
+    """
+    Admin returns None, meaning access to all workspaces.
+    Pilot users return their assigned organization_id.
+    """
     if is_admin(request):
         return None
 
@@ -202,6 +217,11 @@ def get_sender_email_for_organization(
     organization_id: Optional[int],
     session: Session,
 ) -> Optional[str]:
+    """
+    Sender priority:
+    1. Organization sender_email
+    2. SES_FROM_EMAIL fallback from env
+    """
     if organization_id:
         organization = session.get(Organization, organization_id)
 
@@ -211,7 +231,35 @@ def get_sender_email_for_organization(
     return DEFAULT_SES_FROM_EMAIL
 
 
+def get_reply_to_email_for_sender(sender_email: str) -> str:
+    """
+    Converts controlled SES sender address to the normal reply inbox.
+
+    Example:
+    evan.burns@mail.evolutioncrm.us -> evan.burns@evolutioncrm.us
+    mmaynard@mail.evolutioncrm.us -> mmaynard@evolutioncrm.us
+    """
+
+    if not sender_email:
+        return sender_email
+
+    sender_email = sender_email.strip().lower()
+
+    if "@mail.evolutioncrm.us" in sender_email:
+        return sender_email.replace("@mail.evolutioncrm.us", "@evolutioncrm.us")
+
+    return sender_email
+
+
+# ------------------------------------------------------------
+# HubSpot Helper
+# ------------------------------------------------------------
+
 def safe_update_hubspot_dnc(email: str):
+    """
+    Updates HubSpot contact status to DNC, but does not break unsubscribe
+    if HubSpot is unavailable, missing the contact, or misconfigured.
+    """
     if not email:
         return {
             "status": "skipped",
@@ -230,6 +278,10 @@ def safe_update_hubspot_dnc(email: str):
         }
 
 
+# ------------------------------------------------------------
+# Unsubscribe Helpers
+# ------------------------------------------------------------
+
 def make_unsubscribe_token(contact_id: int, email: str) -> str:
     message = f"{contact_id}:{email.lower()}".encode("utf-8")
     secret = SECRET_KEY.encode("utf-8")
@@ -245,6 +297,10 @@ def build_unsubscribe_url(contact: Contact) -> str:
     token = make_unsubscribe_token(contact.id, contact.email)
     return f"{APP_BASE_URL}/unsubscribe/{contact.id}/{token}"
 
+
+# ------------------------------------------------------------
+# Login / Logout
+# ------------------------------------------------------------
 
 @app.get("/login")
 def login_page(request: Request):
@@ -268,6 +324,12 @@ def login_submit(
     password: str = Form(...),
     session: Session = Depends(get_session),
 ):
+    """
+    Allows two login paths:
+    1. Admin login using ADMIN_PASSWORD. Email can be blank.
+    2. Pilot login using AppUser email/password.
+    """
+
     if password == ADMIN_PASSWORD:
         response = RedirectResponse(url="/dashboard", status_code=303)
         response.set_cookie(
@@ -349,6 +411,10 @@ def logout():
     return response
 
 
+# ------------------------------------------------------------
+# Admin Workspace Management
+# ------------------------------------------------------------
+
 @app.get("/admin/workspaces/new", response_class=HTMLResponse)
 def new_workspace_page(
     request: Request,
@@ -423,11 +489,11 @@ def new_workspace_page(
                         <input type="text" name="name" required placeholder="Example: Evan Burns Pilot">
 
                         <label>Sender Email</label>
-                        <input type="email" name="sender_email" required placeholder="mmaynard@mail.evolutioncrm.us">
+                        <input type="email" name="sender_email" required placeholder="evan.burns@mail.evolutioncrm.us">
 
                         <p class="muted">
                             This is the visible From address used by AWS SES for this workspace.
-                            It must be verified in SES, or the sender domain must be verified in SES.
+                            Replies will automatically route to the matching @evolutioncrm.us address when using @mail.evolutioncrm.us.
                         </p>
 
                         <label>Notes</label>
@@ -463,11 +529,17 @@ def create_workspace(
     session.commit()
     session.refresh(workspace)
 
+    reply_to_email = get_reply_to_email_for_sender(workspace.sender_email)
+
     return redirect_with_message(
         "/admin/workspaces/new",
-        f"Workspace created: {workspace.name}. Sender: {workspace.sender_email}.",
+        f"Workspace created: {workspace.name}. Sender: {workspace.sender_email}. Reply-To: {reply_to_email}.",
     )
 
+
+# ------------------------------------------------------------
+# Admin Pilot User Management
+# ------------------------------------------------------------
 
 @app.get("/admin/pilot-users/new", response_class=HTMLResponse)
 def new_pilot_user_page(
@@ -625,6 +697,10 @@ def create_pilot_user(
     )
 
 
+# ------------------------------------------------------------
+# Public Routes
+# ------------------------------------------------------------
+
 @app.get("/")
 def home(request: Request):
     dashboard_link = "/dashboard" if is_logged_in(request) else "/login"
@@ -663,9 +739,6 @@ def debug_aws_env(request: Request):
 
     access_key = os.getenv("AWS_ACCESS_KEY_ID")
     secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-    fallback_secret_key = os.getenv("AWS_SECRET_KEY_FOR_SES")
-    ses_secret_key = os.getenv("SES_SECRET_KEY")
-    test_render_secret = os.getenv("TEST_RENDER_SECRET")
     region = os.getenv("AWS_REGION")
     sender = os.getenv("SES_FROM_EMAIL")
 
@@ -674,12 +747,6 @@ def debug_aws_env(request: Request):
         "AWS_ACCESS_KEY_ID_starts_with": access_key[:4] if access_key else None,
         "AWS_SECRET_ACCESS_KEY_present": bool(secret_key),
         "AWS_SECRET_ACCESS_KEY_length": len(secret_key) if secret_key else 0,
-        "AWS_SECRET_KEY_FOR_SES_present": bool(fallback_secret_key),
-        "AWS_SECRET_KEY_FOR_SES_length": len(fallback_secret_key) if fallback_secret_key else 0,
-        "SES_SECRET_KEY_present": bool(ses_secret_key),
-        "SES_SECRET_KEY_length": len(ses_secret_key) if ses_secret_key else 0,
-        "TEST_RENDER_SECRET_present": bool(test_render_secret),
-        "TEST_RENDER_SECRET_value": test_render_secret,
         "AWS_REGION": region,
         "SES_FROM_EMAIL": sender,
     }
@@ -758,6 +825,10 @@ def unsubscribe_via_link(
     )
 
 
+# ------------------------------------------------------------
+# Send Helper
+# ------------------------------------------------------------
+
 def safe_send_email(
     to_email: str,
     subject: str,
@@ -766,6 +837,7 @@ def safe_send_email(
     reply_to_email: Optional[str] = None,
 ) -> dict:
     final_sender = from_email or DEFAULT_SES_FROM_EMAIL
+    final_reply_to = reply_to_email or final_sender
 
     if not final_sender:
         raise ValueError("Missing sender email. Set workspace sender_email or SES_FROM_EMAIL.")
@@ -773,7 +845,7 @@ def safe_send_email(
     if DEMO_MODE:
         print("\nDEMO MODE - Real email blocked")
         print(f"From: {final_sender}")
-        print(f"Reply-To: {reply_to_email or final_sender}")
+        print(f"Reply-To: {final_reply_to}")
         print(f"To: {to_email}")
         print(f"Subject: {subject}")
         print(body)
@@ -789,7 +861,7 @@ def safe_send_email(
         subject=subject,
         body=body,
         from_email=final_sender,
-        reply_to_email=reply_to_email,
+        reply_to_email=final_reply_to,
     )
 
     return {
@@ -797,6 +869,10 @@ def safe_send_email(
         "response": response,
     }
 
+
+# ------------------------------------------------------------
+# Campaign Context Helper
+# ------------------------------------------------------------
 
 def build_campaign_context(
     campaign_id: int,
@@ -863,6 +939,10 @@ def build_campaign_context(
     return campaign, contacts, steps, draft_rows, stats
 
 
+# ------------------------------------------------------------
+# Dashboard
+# ------------------------------------------------------------
+
 @app.get("/dashboard")
 def dashboard(
     request: Request,
@@ -913,11 +993,15 @@ def dashboard(
             else None
         )
 
+        sender_email = organization.sender_email if organization else ""
+        reply_to_email = get_reply_to_email_for_sender(sender_email) if sender_email else ""
+
         campaign_rows.append({
             "id": campaign.id,
             "name": campaign.name,
             "workspace": organization.name if organization else "No workspace",
-            "sender_email": organization.sender_email if organization else "",
+            "sender_email": sender_email,
+            "reply_to_email": reply_to_email,
             "audience": campaign.audience,
             "offer": campaign.offer,
             "contacts": len(campaign_contacts),
@@ -952,6 +1036,10 @@ def dashboard(
         },
     )
 
+
+# ------------------------------------------------------------
+# Campaign Routes
+# ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns")
 def dashboard_create_campaign(
@@ -1027,6 +1115,8 @@ def campaign_detail(
         else DEFAULT_SES_FROM_EMAIL
     )
 
+    reply_to_email = get_reply_to_email_for_sender(sender_email) if sender_email else None
+
     return templates.TemplateResponse(
         request=request,
         name="campaign_detail.html",
@@ -1036,6 +1126,7 @@ def campaign_detail(
             "campaign": campaign,
             "organization": organization,
             "sender_email": sender_email,
+            "reply_to_email": reply_to_email,
             "contacts": contacts,
             "steps": steps,
             "drafts": draft_rows,
@@ -1071,6 +1162,10 @@ def edit_campaign(
         "Campaign settings updated.",
     )
 
+
+# ------------------------------------------------------------
+# Email Step Routes
+# ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns/{campaign_id}/steps")
 def add_campaign_step(
@@ -1189,6 +1284,10 @@ def delete_campaign_step(
     )
 
 
+# ------------------------------------------------------------
+# Contact Routes
+# ------------------------------------------------------------
+
 @app.post("/dashboard/campaigns/{campaign_id}/contacts/upload")
 async def upload_campaign_contacts(
     campaign_id: int,
@@ -1303,6 +1402,10 @@ def dashboard_unsubscribe_contact(
         "Contact unsubscribed, suppressed, and HubSpot DNC update attempted.",
     )
 
+
+# ------------------------------------------------------------
+# HubSpot Routes
+# ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns/{campaign_id}/hubspot/import")
 def import_hubspot_to_campaign(
@@ -1426,6 +1529,10 @@ def export_campaign_to_hubspot(
         f"HubSpot export complete for {campaign.name}. Created {created}, updated {updated}, skipped {skipped}, failed {failed}.",
     )
 
+
+# ------------------------------------------------------------
+# Draft Routes
+# ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns/{campaign_id}/drafts/generate")
 def generate_campaign_drafts(
@@ -1665,6 +1772,7 @@ def dashboard_edit_draft_page(
     step = session.get(CadenceStep, draft.cadence_step_id) if draft.cadence_step_id else None
 
     sender_email = get_sender_email_for_organization(draft.organization_id, session)
+    reply_to_email = get_reply_to_email_for_sender(sender_email) if sender_email else None
 
     return templates.TemplateResponse(
         request=request,
@@ -1675,6 +1783,7 @@ def dashboard_edit_draft_page(
             "campaign": campaign,
             "step": step,
             "sender_email": sender_email,
+            "reply_to_email": reply_to_email,
             "demo_mode": DEMO_MODE,
             "current_user": current_user_email(request),
             "is_admin": is_admin(request),
@@ -1766,13 +1875,15 @@ def send_single_draft(
             detail="Missing sender email. Add sender_email to the workspace or set SES_FROM_EMAIL.",
         )
 
+    reply_to_email = get_reply_to_email_for_sender(sender_email)
+
     try:
         safe_send_email(
             to_email=contact.email,
             subject=draft.subject,
             body=draft.body,
             from_email=sender_email,
-            reply_to_email=sender_email,
+            reply_to_email=reply_to_email,
         )
     except Exception as e:
         error_message = f"{contact.email}: {repr(e)}"
@@ -1780,13 +1891,13 @@ def send_single_draft(
 
         return redirect_with_message(
             f"/dashboard/campaigns/{campaign_id}",
-            f"Send failed from {sender_email}. {error_message}",
+            f"Send failed from {sender_email}. Reply-To {reply_to_email}. {error_message}",
         )
 
     if DEMO_MODE:
         return redirect_with_message(
             f"/dashboard/campaigns/{campaign_id}",
-            f"Demo mode is on. Email was previewed from {sender_email} but not sent.",
+            f"Demo mode is on. Email was previewed from {sender_email} with Reply-To {reply_to_email}, but not sent.",
         )
 
     draft.sent = True
@@ -1797,7 +1908,7 @@ def send_single_draft(
 
     return redirect_with_message(
         f"/dashboard/campaigns/{campaign_id}",
-        f"Email sent from {sender_email}.",
+        f"Email sent from {sender_email}. Reply-To {reply_to_email}.",
     )
 
 
@@ -1820,6 +1931,8 @@ def send_campaign_day(
             f"/dashboard/campaigns/{campaign_id}",
             "Missing sender email. Add sender_email to the workspace or set SES_FROM_EMAIL.",
         )
+
+    reply_to_email = get_reply_to_email_for_sender(sender_email)
 
     drafts = session.exec(
         select(EmailDraft).where(
@@ -1863,7 +1976,7 @@ def send_campaign_day(
             if dry_run or DEMO_MODE:
                 print("\nDRY RUN / DEMO MODE - Email not sent")
                 print(f"From: {sender_email}")
-                print(f"Reply-To: {sender_email}")
+                print(f"Reply-To: {reply_to_email}")
                 print(f"To: {contact.email}")
                 print(f"Subject: {draft.subject}")
                 print(draft.body)
@@ -1875,7 +1988,7 @@ def send_campaign_day(
                     subject=draft.subject,
                     body=draft.body,
                     from_email=sender_email,
-                    reply_to_email=sender_email,
+                    reply_to_email=reply_to_email,
                 )
 
                 draft.sent = True
@@ -1892,11 +2005,11 @@ def send_campaign_day(
     session.commit()
 
     if DEMO_MODE:
-        message = f"Demo mode is on. Previewed {previewed_count} emails from {sender_email} for Day {send_day}. Nothing was sent."
+        message = f"Demo mode is on. Previewed {previewed_count} emails from {sender_email} with Reply-To {reply_to_email} for Day {send_day}. Nothing was sent."
     elif dry_run:
-        message = f"Dry run complete. Previewed {previewed_count} emails from {sender_email} for Day {send_day}. Nothing was sent."
+        message = f"Dry run complete. Previewed {previewed_count} emails from {sender_email} with Reply-To {reply_to_email} for Day {send_day}. Nothing was sent."
     else:
-        message = f"Sent {sent_count} emails from {sender_email} for Day {send_day}. Skipped {skipped_count}."
+        message = f"Sent {sent_count} emails from {sender_email} with Reply-To {reply_to_email} for Day {send_day}. Skipped {skipped_count}."
 
     if errors:
         error_preview = " | ".join(errors[:2])
@@ -1907,6 +2020,10 @@ def send_campaign_day(
         message,
     )
 
+
+# ------------------------------------------------------------
+# Basic API Endpoints
+# ------------------------------------------------------------
 
 @app.post("/campaigns")
 def create_campaign(
