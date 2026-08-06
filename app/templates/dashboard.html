@@ -8,13 +8,13 @@
             background: #f6f7f9;
             margin: 0;
             padding: 0;
-            color: #1f2937;
+            color: #222;
         }
 
         .topbar {
             background: #111827;
             color: white;
-            padding: 16px 28px;
+            padding: 18px 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -25,193 +25,199 @@
             font-size: 22px;
         }
 
-        .topbar .right {
+        .topbar a {
+            color: white;
+            text-decoration: none;
+            margin-left: 14px;
             font-size: 14px;
         }
 
-        .topbar a {
-            color: white;
-            margin-left: 14px;
-            text-decoration: underline;
-        }
-
         .container {
-            max-width: 1200px;
-            margin: 28px auto;
-            padding: 0 20px;
-        }
-
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 22px;
-            margin-bottom: 22px;
-            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            padding: 30px;
+            max-width: 1400px;
+            margin: 0 auto;
         }
 
         .message {
             background: #ecfdf5;
             border-left: 5px solid #047857;
-            padding: 12px 14px;
-            margin-bottom: 18px;
+            padding: 14px;
+            margin-bottom: 20px;
             border-radius: 6px;
         }
 
-        .demo {
+        .warning {
             background: #fff7ed;
             border-left: 5px solid #ea580c;
-            padding: 12px 14px;
-            margin-bottom: 18px;
+            padding: 14px;
+            margin-bottom: 20px;
             border-radius: 6px;
         }
 
-        .workspace-banner {
-            background: #eff6ff;
-            border-left: 5px solid #2563eb;
-            padding: 12px 14px;
-            margin-bottom: 18px;
-            border-radius: 6px;
-        }
-
-        .mini-links {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 18px;
-        }
-
-        .button,
-        button {
-            display: inline-block;
-            background: #1f5eff;
-            color: white;
-            padding: 9px 13px;
-            border: none;
-            border-radius: 6px;
-            text-decoration: none;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        .button.secondary {
-            background: #374151;
-        }
-
-        .button.light {
-            background: #e5e7eb;
-            color: #111827;
-        }
-
-        .button.green {
-            background: #047857;
-        }
-
-        .button.red {
-            background: #dc2626;
-        }
-
-        h2 {
-            margin-top: 0;
-        }
-
-        label {
-            display: block;
-            margin-top: 12px;
-            font-weight: bold;
-        }
-
-        input,
-        textarea,
-        select {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 10px;
-            margin-top: 5px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-
-        textarea {
-            min-height: 80px;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 14px;
-            margin-bottom: 22px;
-        }
-
-        .stat {
+        .card {
             background: white;
+            padding: 24px;
             border-radius: 12px;
-            padding: 16px;
+            margin-bottom: 24px;
             box-shadow: 0 1px 6px rgba(0,0,0,0.08);
         }
 
+        .card h2 {
+            margin-top: 0;
+            font-size: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(120px, 1fr));
+            gap: 14px;
+        }
+
+        .stat {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            padding: 16px;
+            border-radius: 10px;
+        }
+
         .stat .number {
-            font-size: 26px;
+            font-size: 24px;
             font-weight: bold;
-            color: #1f5eff;
+            margin-bottom: 4px;
         }
 
         .stat .label {
             color: #6b7280;
             font-size: 13px;
-            margin-top: 4px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 14px;
-        }
-
-        th,
-        td {
-            text-align: left;
-            padding: 10px;
-            border-bottom: 1px solid #e5e7eb;
-            vertical-align: top;
-            font-size: 14px;
-        }
-
-        th {
-            background: #f9fafb;
-            font-weight: bold;
-        }
-
-        .muted {
-            color: #6b7280;
-            font-size: 13px;
-        }
-
-        .small {
-            font-size: 12px;
-            color: #6b7280;
         }
 
         .form-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 18px;
+            gap: 16px;
+        }
+
+        .three-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        textarea {
+            min-height: 90px;
+        }
+
+        button, .button {
+            display: inline-block;
+            padding: 9px 13px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        button.green, .button.green {
+            background: #059669;
+        }
+
+        button.red, .button.red {
+            background: #dc2626;
+        }
+
+        button.gray, .button.gray {
+            background: #4b5563;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th {
+            background: #f3f4f6;
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 13px;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+
+        .small {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .badge.green {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge.gray {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .badge.orange {
+            background: #ffedd5;
+            color: #9a3412;
+        }
+
+        .actions {
+            white-space: nowrap;
+        }
+
+        .actions form {
+            display: inline;
         }
 
         @media (max-width: 900px) {
-            .grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .form-grid {
+            .stats-grid,
+            .form-grid,
+            .three-grid {
                 grid-template-columns: 1fr;
             }
 
-            .topbar {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
+            .container {
+                padding: 18px;
+            }
+
+            table {
+                font-size: 12px;
             }
         }
     </style>
@@ -219,77 +225,86 @@
 
 <body>
     <div class="topbar">
-        <h1>AI Emailer Dashboard</h1>
-        <div class="right">
-            Logged in as:
+        <div>
+            <h1>AI Emailer Dashboard</h1>
+            <div class="small" style="color: #d1d5db;">
+                Logged in as: {{ current_user }}
+                {% if is_admin %}
+                    | Admin
+                {% endif %}
+            </div>
+        </div>
+
+        <div>
             {% if is_admin %}
-                <strong>Admin</strong>
-            {% else %}
-                <strong>{{ current_user }}</strong>
+                <a href="/admin/workspaces/new">Create Workspace</a>
+                <a href="/admin/pilot-users/new">Create Pilot User</a>
+                <a href="/organizations">Workspaces API</a>
             {% endif %}
             <a href="/logout">Logout</a>
         </div>
     </div>
 
     <div class="container">
-
         {% if message %}
             <div class="message">{{ message }}</div>
         {% endif %}
 
         {% if demo_mode %}
-            <div class="demo">
-                Demo mode is ON. Emails will be previewed but not actually sent.
+            <div class="warning">
+                <strong>Demo mode is ON.</strong>
+                Emails will be previewed but not actually sent.
             </div>
         {% endif %}
 
         {% if current_organization %}
-            <div class="workspace-banner">
-                Workspace: <strong>{{ current_organization.name }}</strong>
-                {% if current_organization.sender_email %}
-                    <br>
-                    Sender Email: <strong>{{ current_organization.sender_email }}</strong>
-                {% endif %}
+            <div class="card">
+                <h2>Workspace</h2>
+                <p><strong>{{ current_organization.name }}</strong></p>
+                <p class="small">
+                    Sender:
+                    {% if current_organization.sender_email %}
+                        {{ current_organization.sender_email }}
+                    {% else %}
+                        No sender email set
+                    {% endif %}
+                </p>
             </div>
         {% endif %}
 
-        {% if is_admin %}
-            <div class="mini-links">
-                <a class="button secondary" href="/admin/workspaces/new">Create Workspace</a>
-                <a class="button secondary" href="/admin/pilot-users/new">Create Pilot User</a>
-                <a class="button light" href="/organizations">View Workspaces API</a>
-            </div>
-        {% endif %}
+        <div class="card">
+            <h2>Overview</h2>
 
-        <div class="grid">
-            <div class="stat">
-                <div class="number">{{ analytics.total_campaigns }}</div>
-                <div class="label">Campaigns</div>
-            </div>
+            <div class="stats-grid">
+                <div class="stat">
+                    <div class="number">{{ analytics.total_campaigns }}</div>
+                    <div class="label">Campaigns</div>
+                </div>
 
-            <div class="stat">
-                <div class="number">{{ analytics.total_contacts }}</div>
-                <div class="label">Contacts</div>
-            </div>
+                <div class="stat">
+                    <div class="number">{{ analytics.total_contacts }}</div>
+                    <div class="label">Contacts</div>
+                </div>
 
-            <div class="stat">
-                <div class="number">{{ analytics.total_steps }}</div>
-                <div class="label">Email Steps</div>
-            </div>
+                <div class="stat">
+                    <div class="number">{{ analytics.total_steps }}</div>
+                    <div class="label">Email Steps</div>
+                </div>
 
-            <div class="stat">
-                <div class="number">{{ analytics.total_drafts }}</div>
-                <div class="label">Drafts</div>
-            </div>
+                <div class="stat">
+                    <div class="number">{{ analytics.total_drafts }}</div>
+                    <div class="label">Drafts</div>
+                </div>
 
-            <div class="stat">
-                <div class="number">{{ analytics.approved_drafts }}</div>
-                <div class="label">Approved</div>
-            </div>
+                <div class="stat">
+                    <div class="number">{{ analytics.approved_drafts }}</div>
+                    <div class="label">Approved</div>
+                </div>
 
-            <div class="stat">
-                <div class="number">{{ analytics.sent_drafts }}</div>
-                <div class="label">Sent</div>
+                <div class="stat">
+                    <div class="number">{{ analytics.sent_drafts }}</div>
+                    <div class="label">Sent</div>
+                </div>
             </div>
         </div>
 
@@ -298,36 +313,42 @@
 
             <form method="post" action="/dashboard/campaigns">
                 <div class="form-grid">
-                    <div>
-                        {% if is_admin %}
+                    {% if is_admin %}
+                        <div>
                             <label>Workspace</label>
                             <select name="organization_id" required>
                                 <option value="">Select workspace</option>
-                                {% for organization in organizations %}
-                                    <option value="{{ organization.id }}">
-                                        {{ organization.name }}
-                                        {% if organization.sender_email %}
-                                            — {{ organization.sender_email }}
+                                {% for org in organizations %}
+                                    <option value="{{ org.id }}">
+                                        {{ org.name }}
+                                        {% if org.sender_email %}
+                                            - {{ org.sender_email }}
                                         {% endif %}
                                     </option>
                                 {% endfor %}
                             </select>
-                        {% endif %}
+                        </div>
+                    {% endif %}
 
+                    <div>
                         <label>Campaign Name</label>
-                        <input type="text" name="name" required placeholder="Example: CRM Quickstart Outreach">
+                        <input type="text" name="name" required placeholder="Example: August CRM Outreach">
+                    </div>
 
+                    <div>
                         <label>Audience</label>
-                        <input type="text" name="audience" value="small businesses" placeholder="small businesses">
+                        <input type="text" name="audience" value="small businesses">
                     </div>
 
                     <div>
                         <label>Offer</label>
-                        <textarea name="offer" required placeholder="Example: We help small teams clean up CRM follow-up and create a simple sales process."></textarea>
-
-                        <button type="submit">Create Campaign</button>
+                        <textarea name="offer" required placeholder="Example: Free CRM Health Check for small businesses"></textarea>
                     </div>
                 </div>
+
+                <p>
+                    <button type="submit">Create Campaign</button>
+                </p>
             </form>
         </div>
 
@@ -338,70 +359,80 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Campaign</th>
+                            <th>Name</th>
                             {% if is_admin %}
                                 <th>Workspace</th>
-                                <th>Sender</th>
-                                <th>Reply-To</th>
                             {% endif %}
-                            <th>Audience</th>
+                            <th>Sender</th>
+                            <th>Automation</th>
                             <th>Contacts</th>
                             <th>Steps</th>
                             <th>Drafts</th>
                             <th>Approved</th>
                             <th>Sent</th>
                             <th>Open</th>
+                            <th>Delete</th>
                         </tr>
                     </thead>
+
                     <tbody>
                         {% for campaign in campaigns %}
                             <tr>
                                 <td>
                                     <strong>{{ campaign.name }}</strong>
-                                    <div class="small">{{ campaign.offer }}</div>
+                                    <div class="small">
+                                        {{ campaign.audience }}
+                                    </div>
                                 </td>
 
                                 {% if is_admin %}
                                     <td>{{ campaign.workspace }}</td>
-                                    <td>{{ campaign.sender_email }}</td>
-                                    <td>
-                                        {% if campaign.reply_to_email %}
-                                            {{ campaign.reply_to_email }}
-                                        {% else %}
-                                            <span class="muted">Not set</span>
-                                        {% endif %}
-                                    </td>
                                 {% endif %}
 
-                                <td>{{ campaign.audience }}</td>
+                                <td>
+                                    {% if campaign.sender_email %}
+                                        {{ campaign.sender_email }}
+                                        <div class="small">
+                                            Reply-To: {{ campaign.reply_to_email }}
+                                        </div>
+                                    {% else %}
+                                        <span class="small">No sender</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if campaign.automation_enabled %}
+                                        <span class="badge green">On</span>
+                                    {% else %}
+                                        <span class="badge gray">Off</span>
+                                    {% endif %}
+                                    <div class="small">
+                                        Limit: {{ campaign.daily_send_limit or 5 }}/day
+                                    </div>
+                                </td>
+
                                 <td>{{ campaign.contacts }}</td>
                                 <td>{{ campaign.steps }}</td>
                                 <td>{{ campaign.drafts }}</td>
                                 <td>{{ campaign.approved }}</td>
                                 <td>{{ campaign.sent }}</td>
-                                <td>
+
+                                <td class="actions">
                                     <a class="button" href="/dashboard/campaigns/{{ campaign.id }}">Open</a>
+                                </td>
+
+                                <td class="actions">
+                                    <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/delete" onsubmit="return confirm('Delete this campaign and all related contacts, email steps, and drafts?');">
+                                        <button class="red" type="submit">Delete</button>
+                                    </form>
                                 </td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             {% else %}
-                <p class="muted">No campaigns yet. Create your first campaign above.</p>
+                <p>No campaigns yet.</p>
             {% endif %}
-        </div>
-
-        <div class="card">
-            <h2>How to Use</h2>
-            <p class="muted">
-                Create a workspace with a sender email, create a campaign, add cadence steps, upload contacts,
-                generate drafts, approve drafts, then send or dry run by day.
-            </p>
-            <p class="muted">
-                For best deliverability, each workspace sender should use an SES-authenticated address such as
-                <strong>first.last@mail.evolutioncrm.us</strong>. Replies will route to the matching
-                <strong>@evolutioncrm.us</strong> inbox if the app reply-to logic is enabled.
-            </p>
         </div>
     </div>
 

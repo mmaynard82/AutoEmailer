@@ -52,6 +52,14 @@ class Contact(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    # Used for automated campaign sequencing.
+    # Example:
+    # sequence_started_at = Aug 6
+    # send_day 1 sends Aug 6
+    # send_day 3 sends Aug 8
+    # send_day 7 sends Aug 12
+    sequence_started_at: datetime = Field(default_factory=datetime.utcnow)
+
 
 class Campaign(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -63,6 +71,11 @@ class Campaign(SQLModel, table=True):
     audience: str = "small businesses"
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Automation controls
+    automation_enabled: bool = False
+    daily_send_limit: int = 5
+    last_automation_run_at: Optional[datetime] = None
 
 
 class CadenceStep(SQLModel, table=True):
