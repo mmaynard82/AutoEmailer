@@ -1,13 +1,13 @@
 import os
 import hmac
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 from urllib.parse import quote
 
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Request, Form
+from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Request, Form, Query
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from passlib.context import CryptContext
@@ -44,6 +44,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme")
 SECRET_KEY = os.getenv("SECRET_KEY", "local-dev-secret")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/")
 DEFAULT_SES_FROM_EMAIL = os.getenv("SES_FROM_EMAIL")
+CRON_SECRET = os.getenv("CRON_SECRET", "")
 
 
 @app.on_event("startup")
@@ -720,7 +721,8 @@ def home(request: Request):
             "Upload contacts to a campaign",
             "Generate drafts",
             "Approve drafts",
-            "Preview/send",
+            "Turn automation on",
+            "Send manually or through daily cron",
         ],
     }
 
@@ -741,6 +743,7 @@ def debug_aws_env(request: Request):
     secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
     region = os.getenv("AWS_REGION")
     sender = os.getenv("SES_FROM_EMAIL")
+    cron_secret = os.getenv("CRON_SECRET")
 
     return {
         "AWS_ACCESS_KEY_ID_present": bool(access_key),
@@ -749,6 +752,7 @@ def debug_aws_env(request: Request):
         "AWS_SECRET_ACCESS_KEY_length": len(secret_key) if secret_key else 0,
         "AWS_REGION": region,
         "SES_FROM_EMAIL": sender,
+        "CRON_SECRET_present": bool(cron_secret),
     }
 
 
@@ -934,6 +938,9 @@ def build_campaign_context(
         "approved": len([d for d in drafts if d.approved]),
         "sent": len([d for d in drafts if d.sent]),
         "unapproved": len([d for d in drafts if not d.approved and not d.sent]),
+        "automation_enabled": campaign.automation_enabled,
+        "daily_send_limit": campaign.daily_send_limit,
+        "last_automation_run_at": campaign.last_automation_run_at,
     }
 
     return campaign, contacts, steps, draft_rows, stats
@@ -1010,6 +1017,8 @@ def dashboard(
             "approved": len([d for d in campaign_drafts if d.approved]),
             "sent": len([d for d in campaign_drafts if d.sent]),
             "unapproved": len([d for d in campaign_drafts if not d.approved and not d.sent]),
+            "automation_enabled": campaign.automation_enabled,
+            "daily_send_limit": campaign.daily_send_limit,
         })
 
     analytics = {
@@ -1076,6 +1085,8 @@ def dashboard_create_campaign(
         name=name,
         offer=offer,
         audience=audience or "small businesses",
+        automation_enabled=False,
+        daily_send_limit=5,
     )
 
     session.add(campaign)
@@ -1344,6 +1355,7 @@ async def upload_campaign_contacts(
             industry=str(row.get("industry", "")).strip() if "industry" in df.columns else None,
             role=str(row.get("role", "")).strip() if "role" in df.columns else None,
             website=str(row.get("website", "")).strip() if "website" in df.columns else None,
+            sequence_started_at=datetime.utcnow(),
         )
 
         session.add(contact)
@@ -1403,6 +1415,42 @@ def dashboard_unsubscribe_contact(
     )
 
 
+@app.post("/dashboard/contacts/{contact_id}/delete")
+def delete_contact(
+    contact_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    contact = session.get(Contact, contact_id)
+
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found.")
+
+    require_contact_access(contact, request, session)
+
+    campaign_id = contact.campaign_id
+    contact_email = contact.email
+
+    drafts = session.exec(
+        select(EmailDraft).where(EmailDraft.contact_id == contact_id)
+    ).all()
+
+    draft_count = len(drafts)
+
+    for draft in drafts:
+        session.delete(draft)
+
+    session.delete(contact)
+    session.commit()
+
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        f"Deleted contact {contact_email} and {draft_count} related drafts.",
+    )
+
+
 # ------------------------------------------------------------
 # HubSpot Routes
 # ------------------------------------------------------------
@@ -1458,6 +1506,7 @@ def import_hubspot_to_campaign(
             industry="HubSpot Import",
             role=(props.get("jobtitle") or "").strip() or None,
             website=(props.get("website") or "").strip() or None,
+            sequence_started_at=datetime.utcnow(),
         )
 
         session.add(contact)
@@ -1886,12 +1935,20 @@ def send_single_draft(
             reply_to_email=reply_to_email,
         )
     except Exception as e:
-        error_message = f"{contact.email}: {repr(e)}"
-        print(f"SES SINGLE SEND ERROR: {error_message}")
+        technical_error = f"{contact.email}: {repr(e)}"
+        print(f"SES SINGLE SEND ERROR: {technical_error}")
+
+        if is_admin(request):
+            user_message = (
+                f"Send failed from {sender_email}. Reply-To {reply_to_email}. "
+                f"{technical_error}"
+            )
+        else:
+            user_message = "Email could not be sent. Please contact the administrator."
 
         return redirect_with_message(
             f"/dashboard/campaigns/{campaign_id}",
-            f"Send failed from {sender_email}. Reply-To {reply_to_email}. {error_message}",
+            user_message,
         )
 
     if DEMO_MODE:
@@ -1998,9 +2055,13 @@ def send_campaign_day(
                 sent_count += 1
 
         except Exception as e:
-            error_message = f"{contact.email}: {repr(e)}"
-            print(f"SES SEND ERROR: {error_message}")
-            errors.append(error_message)
+            technical_error = f"{contact.email}: {repr(e)}"
+            print(f"SES SEND ERROR: {technical_error}")
+
+            if is_admin(request):
+                errors.append(technical_error)
+            else:
+                errors.append(f"{contact.email}: Email could not be sent. Please contact the administrator.")
 
     session.commit()
 
@@ -2019,6 +2080,253 @@ def send_campaign_day(
         f"/dashboard/campaigns/{campaign_id}",
         message,
     )
+
+
+# ------------------------------------------------------------
+# Campaign Automation + Delete Routes
+# ------------------------------------------------------------
+
+def draft_is_due_today(contact: Contact, draft: EmailDraft) -> bool:
+    """
+    Determines whether a draft is due based on the contact's sequence start date.
+
+    Example:
+    sequence_started_at = Aug 6
+    send_day = 1 -> due Aug 6
+    send_day = 3 -> due Aug 8
+    send_day = 7 -> due Aug 12
+    """
+
+    if not draft.send_day:
+        return False
+
+    sequence_start = contact.sequence_started_at or contact.created_at
+
+    if not sequence_start:
+        return False
+
+    due_date = sequence_start.date() + timedelta(days=max(draft.send_day - 1, 0))
+    today = datetime.utcnow().date()
+
+    return due_date <= today
+
+
+@app.post("/dashboard/campaigns/{campaign_id}/automation")
+def update_campaign_automation(
+    campaign_id: int,
+    request: Request,
+    automation_enabled: Optional[str] = Form(None),
+    daily_send_limit: int = Form(5),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+
+    campaign.automation_enabled = automation_enabled == "true"
+    campaign.daily_send_limit = max(1, min(daily_send_limit, 100))
+
+    session.add(campaign)
+    session.commit()
+
+    status = "enabled" if campaign.automation_enabled else "disabled"
+
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        f"Automation {status}. Daily send limit set to {campaign.daily_send_limit}.",
+    )
+
+
+@app.post("/dashboard/campaigns/{campaign_id}/delete")
+def delete_campaign(
+    campaign_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+
+    drafts = session.exec(
+        select(EmailDraft).where(EmailDraft.campaign_id == campaign_id)
+    ).all()
+
+    steps = session.exec(
+        select(CadenceStep).where(CadenceStep.campaign_id == campaign_id)
+    ).all()
+
+    contacts = session.exec(
+        select(Contact).where(Contact.campaign_id == campaign_id)
+    ).all()
+
+    draft_count = len(drafts)
+    step_count = len(steps)
+    contact_count = len(contacts)
+
+    for draft in drafts:
+        session.delete(draft)
+
+    for step in steps:
+        session.delete(step)
+
+    for contact in contacts:
+        session.delete(contact)
+
+    campaign_name = campaign.name
+    session.delete(campaign)
+    session.commit()
+
+    return redirect_with_message(
+        "/dashboard",
+        f"Deleted campaign '{campaign_name}' with {contact_count} contacts, {step_count} steps, and {draft_count} drafts.",
+    )
+
+
+@app.post("/cron/send-due-emails")
+def cron_send_due_emails(
+    secret: str = Query(""),
+    session: Session = Depends(get_session),
+):
+    """
+    Called by Render Cron Job once per day.
+
+    It sends approved, unsent drafts only when:
+    - campaign automation is enabled
+    - draft send_day is due based on contact.sequence_started_at
+    - contact is not suppressed/unsubscribed
+    - draft is approved
+    - draft has not already been sent
+    """
+
+    if not CRON_SECRET:
+        raise HTTPException(status_code=500, detail="CRON_SECRET is not configured.")
+
+    if not hmac.compare_digest(secret, CRON_SECRET):
+        raise HTTPException(status_code=403, detail="Invalid cron secret.")
+
+    if DEMO_MODE:
+        print("CRON SEND SKIPPED: DEMO_MODE=true")
+        return {
+            "status": "skipped",
+            "reason": "DEMO_MODE=true",
+            "sent": 0,
+            "errors": [],
+        }
+
+    campaigns = session.exec(
+        select(Campaign).where(Campaign.automation_enabled == True)
+    ).all()
+
+    total_sent = 0
+    total_skipped = 0
+    errors = []
+    campaign_results = []
+
+    for campaign in campaigns:
+        sender_email = get_sender_email_for_organization(campaign.organization_id, session)
+
+        if not sender_email:
+            errors.append(f"Campaign {campaign.id} missing sender email.")
+            continue
+
+        reply_to_email = get_reply_to_email_for_sender(sender_email)
+        daily_limit = campaign.daily_send_limit or 5
+
+        drafts = session.exec(
+            select(EmailDraft).where(
+                EmailDraft.campaign_id == campaign.id,
+                EmailDraft.approved == True,
+                EmailDraft.sent == False,
+            )
+        ).all()
+
+        drafts = sorted(
+            drafts,
+            key=lambda d: (
+                d.send_day or 999,
+                d.created_at,
+                d.id or 0,
+            ),
+        )
+
+        campaign_sent = 0
+        campaign_skipped = 0
+
+        for draft in drafts:
+            if campaign_sent >= daily_limit:
+                break
+
+            contact = session.get(Contact, draft.contact_id)
+
+            if not contact:
+                campaign_skipped += 1
+                total_skipped += 1
+                continue
+
+            if contact.unsubscribed or contact.suppressed:
+                campaign_skipped += 1
+                total_skipped += 1
+                continue
+
+            suppression = session.exec(
+                select(Suppression).where(
+                    Suppression.email == contact.email,
+                    Suppression.organization_id == contact.organization_id,
+                )
+            ).first()
+
+            if suppression:
+                campaign_skipped += 1
+                total_skipped += 1
+                continue
+
+            if not draft_is_due_today(contact, draft):
+                continue
+
+            try:
+                safe_send_email(
+                    to_email=contact.email,
+                    subject=draft.subject,
+                    body=draft.body,
+                    from_email=sender_email,
+                    reply_to_email=reply_to_email,
+                )
+
+                draft.sent = True
+                draft.sent_at = datetime.utcnow()
+
+                session.add(draft)
+
+                campaign_sent += 1
+                total_sent += 1
+
+            except Exception as e:
+                technical_error = f"Campaign {campaign.id}, draft {draft.id}, {contact.email}: {repr(e)}"
+                print(f"CRON SES SEND ERROR: {technical_error}")
+                errors.append(technical_error)
+
+        campaign.last_automation_run_at = datetime.utcnow()
+        session.add(campaign)
+
+        campaign_results.append({
+            "campaign_id": campaign.id,
+            "campaign_name": campaign.name,
+            "sent": campaign_sent,
+            "skipped": campaign_skipped,
+            "daily_limit": daily_limit,
+            "sender_email": sender_email,
+            "reply_to_email": reply_to_email,
+        })
+
+    session.commit()
+
+    return {
+        "status": "complete",
+        "sent": total_sent,
+        "skipped": total_skipped,
+        "errors": errors,
+        "campaigns": campaign_results,
+    }
 
 
 # ------------------------------------------------------------
