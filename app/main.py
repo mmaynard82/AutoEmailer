@@ -21,6 +21,7 @@ from app.models import (
     Campaign,
     CadenceStep,
     EmailDraft,
+    StyleExample,
     Suppression,
 )
 from app.ai_writer import render_template_email
@@ -250,6 +251,31 @@ def get_reply_to_email_for_sender(sender_email: str) -> str:
         return sender_email.replace("@mail.evolutioncrm.us", "@evolutioncrm.us")
 
     return sender_email
+
+
+def get_style_examples_for_organization(
+    organization_id: Optional[int],
+    session: Session,
+    limit: int = 5,
+) -> list[dict]:
+    if not organization_id:
+        return []
+
+    examples = session.exec(
+        select(StyleExample)
+        .where(StyleExample.organization_id == organization_id)
+        .order_by(StyleExample.created_at.desc())
+    ).all()
+
+    examples = examples[:limit]
+
+    return [
+        {
+            "subject": example.subject,
+            "body": example.body,
+        }
+        for example in examples
+    ]
 
 
 # ------------------------------------------------------------
@@ -720,6 +746,8 @@ def home(request: Request):
             "Add/edit email steps",
             "Upload contacts to a campaign",
             "Generate drafts",
+            "Edit drafts",
+            "Save strong drafts as style examples",
             "Approve drafts",
             "Turn automation on",
             "Send manually or through daily cron",
@@ -1128,6 +1156,12 @@ def campaign_detail(
 
     reply_to_email = get_reply_to_email_for_sender(sender_email) if sender_email else None
 
+    style_examples = session.exec(
+        select(StyleExample)
+        .where(StyleExample.organization_id == campaign.organization_id)
+        .order_by(StyleExample.created_at.desc())
+    ).all()
+
     return templates.TemplateResponse(
         request=request,
         name="campaign_detail.html",
@@ -1142,6 +1176,7 @@ def campaign_detail(
             "steps": steps,
             "drafts": draft_rows,
             "stats": stats,
+            "style_examples": style_examples,
             "current_user": current_user_email(request),
             "is_admin": is_admin(request),
         },
@@ -1171,6 +1206,52 @@ def edit_campaign(
     return redirect_with_message(
         f"/dashboard/campaigns/{campaign_id}",
         "Campaign settings updated.",
+    )
+
+
+@app.post("/dashboard/campaigns/{campaign_id}/style-profile")
+def update_workspace_style_profile(
+    campaign_id: int,
+    request: Request,
+    brand_voice: str = Form(""),
+    avoid_phrases: str = Form(""),
+    preferred_cta: str = Form(""),
+    signature_name: str = Form(""),
+    signature_title: str = Form(""),
+    signature_company: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+
+    if not campaign.organization_id:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign_id}",
+            "This campaign does not have a workspace.",
+        )
+
+    organization = session.get(Organization, campaign.organization_id)
+
+    if not organization:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign_id}",
+            "Workspace not found.",
+        )
+
+    organization.brand_voice = brand_voice.strip() or None
+    organization.avoid_phrases = avoid_phrases.strip() or None
+    organization.preferred_cta = preferred_cta.strip() or None
+    organization.signature_name = signature_name.strip() or None
+    organization.signature_title = signature_title.strip() or None
+    organization.signature_company = signature_company.strip() or None
+
+    session.add(organization)
+    session.commit()
+
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        "Workspace voice profile saved. Future generated drafts will use this voice.",
     )
 
 
@@ -1283,7 +1364,7 @@ def delete_campaign_step(
     if existing_drafts:
         return redirect_with_message(
             f"/dashboard/campaigns/{campaign_id}",
-            "Cannot delete this step because drafts already exist for it.",
+            "Cannot delete this step because drafts already exist for it. Delete the unsent drafts for this step first.",
         )
 
     session.delete(step)
@@ -1624,7 +1705,7 @@ def delete_unsent_drafts_for_step(
 ):
     require_dashboard_login(request)
 
-    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+    get_campaign_or_404_for_user(campaign_id, request, session)
 
     step = session.get(CadenceStep, cadence_step_id)
 
@@ -1655,6 +1736,96 @@ def delete_unsent_drafts_for_step(
         f"/dashboard/campaigns/{campaign_id}",
         f"Deleted {deleted_count} unsent drafts for Step {step.step_number} - {step.name}. You can now regenerate drafts for that step.",
     )
+
+
+@app.post("/dashboard/drafts/{draft_id}/save-style-example")
+def save_draft_as_style_example(
+    draft_id: int,
+    request: Request,
+    label: str = Form("Edited draft example"),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    draft = session.get(EmailDraft, draft_id)
+
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found.")
+
+    require_draft_access(draft, request, session)
+
+    if not draft.organization_id:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}",
+            "Draft does not have a workspace, so it cannot be saved as a style example.",
+        )
+
+    existing = session.exec(
+        select(StyleExample).where(
+            StyleExample.organization_id == draft.organization_id,
+            StyleExample.draft_id == draft.id,
+        )
+    ).first()
+
+    if existing:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}",
+            "This draft is already saved as a style example.",
+        )
+
+    example = StyleExample(
+        organization_id=draft.organization_id,
+        campaign_id=draft.campaign_id,
+        draft_id=draft.id,
+        label=label.strip() or "Edited draft example",
+        subject=draft.subject,
+        body=draft.body,
+    )
+
+    session.add(example)
+    session.commit()
+
+    return redirect_with_message(
+        f"/dashboard/campaigns/{draft.campaign_id}",
+        "Draft saved as a style example. Future generated drafts can use this voice.",
+    )
+
+
+@app.post("/dashboard/style-examples/{example_id}/delete")
+def delete_style_example(
+    example_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    example = session.get(StyleExample, example_id)
+
+    if not example:
+        raise HTTPException(status_code=404, detail="Style example not found.")
+
+    if not is_admin(request):
+        org_id = get_current_organization_id(request, session)
+
+        if example.organization_id != org_id:
+            raise HTTPException(status_code=403, detail="Style example access denied.")
+
+    campaign_id = example.campaign_id
+
+    session.delete(example)
+    session.commit()
+
+    if campaign_id:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign_id}",
+            "Style example deleted.",
+        )
+
+    return redirect_with_message(
+        "/dashboard",
+        "Style example deleted.",
+    )
+
 
 @app.post("/dashboard/campaigns/{campaign_id}/drafts/generate")
 def generate_campaign_drafts(
@@ -1713,6 +1884,18 @@ def generate_campaign_drafts(
             "No email steps found. Add an email step first.",
         )
 
+    organization = (
+        session.get(Organization, campaign.organization_id)
+        if campaign.organization_id
+        else None
+    )
+
+    style_examples = get_style_examples_for_organization(
+        campaign.organization_id,
+        session,
+        limit=5,
+    )
+
     created = 0
     skipped = 0
 
@@ -1749,6 +1932,13 @@ def generate_campaign_drafts(
                 cadence_step_name=step.name,
                 cadence_step_purpose=step.purpose,
                 step_number=step.step_number,
+                brand_voice=organization.brand_voice if organization else None,
+                avoid_phrases=organization.avoid_phrases if organization else None,
+                preferred_cta=organization.preferred_cta if organization else None,
+                signature_name=organization.signature_name if organization else None,
+                signature_title=organization.signature_title if organization else None,
+                signature_company=organization.signature_company if organization else None,
+                style_examples=style_examples,
             )
 
             unsubscribe_line = f"\n\nIf this is not relevant, you can stop future emails here: {unsubscribe_url}"
@@ -1942,7 +2132,7 @@ def dashboard_save_draft_edit(
 
     return redirect_with_message(
         f"/dashboard/campaigns/{draft.campaign_id}",
-        "Draft saved. Re-approval required.",
+        "Draft saved. Re-approval required. Use 'Save as Style Example' if this draft reflects your preferred voice.",
     )
 
 
@@ -2232,9 +2422,16 @@ def delete_campaign(
         select(Contact).where(Contact.campaign_id == campaign_id)
     ).all()
 
+    style_examples = session.exec(
+        select(StyleExample).where(StyleExample.campaign_id == campaign_id)
+    ).all()
+
     draft_count = len(drafts)
     step_count = len(steps)
     contact_count = len(contacts)
+
+    for example in style_examples:
+        session.delete(example)
 
     for draft in drafts:
         session.delete(draft)
@@ -2262,13 +2459,6 @@ def cron_send_due_emails(
 ):
     """
     Called by Render Cron Job once per day.
-
-    It sends approved, unsent drafts only when:
-    - campaign automation is enabled
-    - draft send_day is due based on contact.sequence_started_at
-    - contact is not suppressed/unsubscribed
-    - draft is approved
-    - draft has not already been sent
     """
 
     if not CRON_SECRET:
