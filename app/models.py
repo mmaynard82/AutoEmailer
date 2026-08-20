@@ -13,6 +13,14 @@ class Organization(SQLModel, table=True):
     # Example: evan.burns@mail.evolutioncrm.us
     sender_email: Optional[str] = None
 
+    # Brand voice / style profile used by AI drafting.
+    brand_voice: Optional[str] = None
+    avoid_phrases: Optional[str] = None
+    preferred_cta: Optional[str] = None
+    signature_name: Optional[str] = None
+    signature_title: Optional[str] = None
+    signature_company: Optional[str] = None
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -53,11 +61,6 @@ class Contact(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Used for automated campaign sequencing.
-    # Example:
-    # sequence_started_at = Aug 6
-    # send_day 1 sends Aug 6
-    # send_day 3 sends Aug 8
-    # send_day 7 sends Aug 12
     sequence_started_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -127,6 +130,20 @@ class EmailDraft(SQLModel, table=True):
     approved: bool = False
     sent: bool = False
     sent_at: Optional[datetime] = None
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class StyleExample(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    organization_id: Optional[int] = Field(default=None, index=True)
+    campaign_id: Optional[int] = Field(default=None, index=True)
+    draft_id: Optional[int] = Field(default=None, index=True)
+
+    label: str = "Approved style example"
+    subject: str
+    body: str
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
