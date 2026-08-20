@@ -1583,6 +1583,79 @@ def export_campaign_to_hubspot(
 # Draft Routes
 # ------------------------------------------------------------
 
+@app.post("/dashboard/drafts/{draft_id}/delete")
+def delete_single_draft(
+    draft_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    draft = session.get(EmailDraft, draft_id)
+
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found.")
+
+    require_draft_access(draft, request, session)
+
+    campaign_id = draft.campaign_id
+
+    if draft.sent:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign_id}",
+            "Sent drafts cannot be deleted because they are part of the send history.",
+        )
+
+    session.delete(draft)
+    session.commit()
+
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        "Draft deleted. You can now regenerate it if needed.",
+    )
+
+
+@app.post("/dashboard/campaigns/{campaign_id}/drafts/delete-step")
+def delete_unsent_drafts_for_step(
+    campaign_id: int,
+    request: Request,
+    cadence_step_id: int = Form(...),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+
+    step = session.get(CadenceStep, cadence_step_id)
+
+    if not step or step.campaign_id != campaign_id:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign_id}",
+            "Email step not found for this campaign.",
+        )
+
+    require_step_access(step, request, session)
+
+    drafts = session.exec(
+        select(EmailDraft).where(
+            EmailDraft.campaign_id == campaign_id,
+            EmailDraft.cadence_step_id == cadence_step_id,
+            EmailDraft.sent == False,
+        )
+    ).all()
+
+    deleted_count = len(drafts)
+
+    for draft in drafts:
+        session.delete(draft)
+
+    session.commit()
+
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign_id}",
+        f"Deleted {deleted_count} unsent drafts for Step {step.step_number} - {step.name}. You can now regenerate drafts for that step.",
+    )
+
 @app.post("/dashboard/campaigns/{campaign_id}/drafts/generate")
 def generate_campaign_drafts(
     campaign_id: int,

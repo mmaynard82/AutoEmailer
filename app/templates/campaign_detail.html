@@ -255,6 +255,11 @@
             margin-bottom: 16px;
         }
 
+        .danger-zone {
+            background: #fff1f2;
+            border: 1px solid #fecdd3;
+        }
+
         @media (max-width: 1100px) {
             .stats-grid,
             .form-grid,
@@ -718,6 +723,34 @@ Evolution CRM</textarea>
             <p class="small">
                 Existing drafts are skipped. If you edit a step, existing drafts will not automatically change.
             </p>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 22px 0;">
+
+            <h3>Delete Drafts for an Email Step</h3>
+
+            <p class="small">
+                Use this if a step template was wrong and you need to delete the bad drafts before regenerating them.
+                Only unsent drafts will be deleted. Sent drafts are protected.
+            </p>
+
+            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/drafts/delete-step" onsubmit="return confirm('Delete all unsent drafts for this email step? You can regenerate them afterward.');">
+                <div class="three-grid">
+                    <div>
+                        <label>Email Step</label>
+                        <select name="cadence_step_id" required>
+                            {% for step in steps %}
+                                <option value="{{ step.id }}">
+                                    Step {{ step.step_number }} - Day {{ step.send_day }} - {{ step.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <p>
+                    <button class="red" type="submit">Delete Unsent Drafts for This Step</button>
+                </p>
+            </form>
         </div>
 
         <div class="card">
@@ -808,6 +841,10 @@ Evolution CRM</textarea>
                                     {% if not draft.sent %}
                                         <a class="button gray" href="/dashboard/drafts/{{ draft.id }}/edit">Edit</a>
 
+                                        <form method="post" action="/dashboard/drafts/{{ draft.id }}/delete" onsubmit="return confirm('Delete this draft? You can regenerate it afterward if needed.');">
+                                            <button class="red" type="submit">Delete</button>
+                                        </form>
+
                                         {% if not draft.approved %}
                                             <form method="post" action="/dashboard/drafts/{{ draft.id }}/approve">
                                                 <button class="green" type="submit">Approve</button>
@@ -820,7 +857,7 @@ Evolution CRM</textarea>
                                             </form>
                                         {% endif %}
                                     {% else %}
-                                        <span class="small">No actions</span>
+                                        <span class="small">Sent draft protected</span>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -832,7 +869,7 @@ Evolution CRM</textarea>
             {% endif %}
         </div>
 
-        <div class="card">
+        <div class="card danger-zone">
             <h2>Delete Campaign</h2>
 
             <p class="small">
