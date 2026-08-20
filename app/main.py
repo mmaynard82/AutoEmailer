@@ -749,6 +749,7 @@ def home(request: Request):
             "Edit drafts",
             "Save strong drafts as style examples",
             "Approve drafts",
+            "Pick an automation start date",
             "Turn automation on",
             "Send manually or through daily cron",
         ],
@@ -968,6 +969,7 @@ def build_campaign_context(
         "unapproved": len([d for d in drafts if not d.approved and not d.sent]),
         "automation_enabled": campaign.automation_enabled,
         "daily_send_limit": campaign.daily_send_limit,
+        "automation_start_date": campaign.automation_start_date,
         "last_automation_run_at": campaign.last_automation_run_at,
     }
 
@@ -1047,6 +1049,7 @@ def dashboard(
             "unapproved": len([d for d in campaign_drafts if not d.approved and not d.sent]),
             "automation_enabled": campaign.automation_enabled,
             "daily_send_limit": campaign.daily_send_limit,
+            "automation_start_date": campaign.automation_start_date,
         })
 
     analytics = {
@@ -2349,26 +2352,36 @@ def send_campaign_day(
 # Campaign Automation + Delete Routes
 # ------------------------------------------------------------
 
-def draft_is_due_today(contact: Contact, draft: EmailDraft) -> bool:
+def draft_is_due_today(contact: Contact, draft: EmailDraft, campaign: Campaign) -> bool:
     """
-    Determines whether a draft is due based on the contact's sequence start date.
+    Determines whether a draft is due.
+
+    Priority:
+    1. If campaign.automation_start_date is set, use that as Day 1.
+    2. Otherwise, use the contact's sequence_started_at date.
+    3. Otherwise, use the contact's created_at date.
 
     Example:
-    sequence_started_at = Aug 6
-    send_day = 1 -> due Aug 6
-    send_day = 3 -> due Aug 8
-    send_day = 7 -> due Aug 12
+    automation_start_date = Sept 1
+    send_day = 1 -> due Sept 1
+    send_day = 3 -> due Sept 3
+    send_day = 7 -> due Sept 7
     """
 
     if not draft.send_day:
         return False
 
-    sequence_start = contact.sequence_started_at or contact.created_at
+    if campaign.automation_start_date:
+        sequence_start_date = campaign.automation_start_date
+    else:
+        sequence_start = contact.sequence_started_at or contact.created_at
 
-    if not sequence_start:
-        return False
+        if not sequence_start:
+            return False
 
-    due_date = sequence_start.date() + timedelta(days=max(draft.send_day - 1, 0))
+        sequence_start_date = sequence_start.date()
+
+    due_date = sequence_start_date + timedelta(days=max(draft.send_day - 1, 0))
     today = datetime.utcnow().date()
 
     return due_date <= today
@@ -2380,6 +2393,7 @@ def update_campaign_automation(
     request: Request,
     automation_enabled: Optional[str] = Form(None),
     daily_send_limit: int = Form(5),
+    automation_start_date: str = Form(""),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
@@ -2389,14 +2403,33 @@ def update_campaign_automation(
     campaign.automation_enabled = automation_enabled == "true"
     campaign.daily_send_limit = max(1, min(daily_send_limit, 100))
 
+    if automation_start_date.strip():
+        try:
+            campaign.automation_start_date = datetime.strptime(
+                automation_start_date.strip(),
+                "%Y-%m-%d",
+            ).date()
+        except ValueError:
+            return redirect_with_message(
+                f"/dashboard/campaigns/{campaign_id}",
+                "Invalid automation start date. Please select a valid date.",
+            )
+    else:
+        campaign.automation_start_date = None
+
     session.add(campaign)
     session.commit()
 
     status = "enabled" if campaign.automation_enabled else "disabled"
 
+    if campaign.automation_start_date:
+        date_message = f" Automation start date set to {campaign.automation_start_date}."
+    else:
+        date_message = " No start date selected, so contacts will use their own upload/start date."
+
     return redirect_with_message(
         f"/dashboard/campaigns/{campaign_id}",
-        f"Automation {status}. Daily send limit set to {campaign.daily_send_limit}.",
+        f"Automation {status}. Daily send limit set to {campaign.daily_send_limit}.{date_message}",
     )
 
 
@@ -2543,7 +2576,7 @@ def cron_send_due_emails(
                 total_skipped += 1
                 continue
 
-            if not draft_is_due_today(contact, draft):
+            if not draft_is_due_today(contact, draft, campaign):
                 continue
 
             try:
@@ -2577,6 +2610,7 @@ def cron_send_due_emails(
             "sent": campaign_sent,
             "skipped": campaign_skipped,
             "daily_limit": daily_limit,
+            "automation_start_date": str(campaign.automation_start_date) if campaign.automation_start_date else None,
             "sender_email": sender_email,
             "reply_to_email": reply_to_email,
         })

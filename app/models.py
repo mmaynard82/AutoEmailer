@@ -1,5 +1,5 @@
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 from sqlmodel import SQLModel, Field
 
 
@@ -61,6 +61,7 @@ class Contact(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Used for automated campaign sequencing.
+    # If a campaign automation_start_date is set, that campaign date overrides this.
     sequence_started_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -78,6 +79,12 @@ class Campaign(SQLModel, table=True):
     # Automation controls
     automation_enabled: bool = False
     daily_send_limit: int = 5
+
+    # Optional campaign-level sequence start date.
+    # If set, Day 1 starts on this date for all contacts in the campaign.
+    # If blank, the app falls back to each contact's sequence_started_at date.
+    automation_start_date: Optional[date] = None
+
     last_automation_run_at: Optional[datetime] = None
 
 

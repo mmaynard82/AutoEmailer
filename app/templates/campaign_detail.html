@@ -471,13 +471,21 @@
             <h2>Campaign Automation</h2>
 
             <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/automation">
-                <div class="three-grid">
+                <div class="four-grid">
                     <div>
                         <label>Automation</label>
                         <select name="automation_enabled">
                             <option value="">Off</option>
                             <option value="true" {% if campaign.automation_enabled %}selected{% endif %}>On</option>
                         </select>
+                    </div>
+
+                    <div>
+                        <label>Automation Start Date</label>
+                        <input type="date" name="automation_start_date" value="{% if campaign.automation_start_date %}{{ campaign.automation_start_date }}{% endif %}">
+                        <div class="small">
+                            This is the Day 1 date for this campaign. Leave blank to use each contact's upload date.
+                        </div>
                     </div>
 
                     <div>
@@ -504,7 +512,8 @@
 
             <p class="small">
                 Automation sends approved, unsent drafts when their send day is due.
-                Example: if a contact starts on August 6, Day 1 sends August 6 and Day 3 sends August 8.
+                If you choose an Automation Start Date, that date becomes Day 1 for the whole campaign.
+                If you leave it blank, each contact uses their upload/start date.
                 Drafts must be generated and approved first.
             </p>
         </div>
