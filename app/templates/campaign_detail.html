@@ -184,6 +184,14 @@
             vertical-align: top;
         }
 
+        code {
+            background: #eef2ff;
+            color: #1e3a8a;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
         .small {
             font-size: 12px;
             color: #6b7280;
@@ -197,6 +205,19 @@
             border-radius: 6px;
             color: #4b5563;
             font-size: 13px;
+        }
+
+        .field-helper {
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-left: 5px solid #2563eb;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 18px;
+        }
+
+        .field-helper strong {
+            color: #111827;
         }
 
         .badge {
@@ -548,6 +569,43 @@
         <div class="card">
             <h2>Add Email Step</h2>
 
+            <div class="field-helper">
+                <strong>Available Template Fields</strong>
+
+                <p class="small" style="margin-bottom: 10px;">
+                    Use these fields in the subject or body templates. The system replaces them with each contact’s information when drafts are generated.
+                </p>
+
+                <div class="form-grid">
+                    <div>
+                        <strong>Contact / Campaign Fields</strong>
+                        <div class="small" style="margin-top: 8px;">
+                            <code>{{ "{{ first_name }}" }}</code> — Contact first name<br>
+                            <code>{{ "{{ company }}" }}</code> — Company name<br>
+                            <code>{{ "{{ audience }}" }}</code> — Campaign audience<br>
+                            <code>{{ "{{ offer }}" }}</code> — Campaign offer<br>
+                            <code>{{ "{{ call_to_action }}" }}</code> — Step call to action
+                        </div>
+                    </div>
+
+                    <div>
+                        <strong>AI / System Fields</strong>
+                        <div class="small" style="margin-top: 8px;">
+                            <code>{{ "{{ intro_para }}" }}</code> — AI-generated personalized intro<br>
+                            <code>{{ "{{ unsubscribe_url }}" }}</code> — Contact unsubscribe link<br>
+                            <code>{first name}</code> — Also supported<br>
+                            <code>{company}</code> — Also supported<br>
+                            <code>{intro para}</code> — Also supported
+                        </div>
+                    </div>
+                </div>
+
+                <p class="small" style="margin-top: 12px;">
+                    Example subject: <code>Quick question for {{ "{{ company }}" }}</code><br>
+                    Example opening: <code>Hi {{ "{{ first_name }}" }},</code>
+                </p>
+            </div>
+
             <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/steps">
                 <div class="four-grid">
                     <div>
@@ -584,20 +642,20 @@
 
                     <div>
                         <label>Subject Template</label>
-                        <input type="text" name="template_subject" value="Quick question for {{ company }}">
+                        <input type="text" name="template_subject" value="Quick question for {{ "{{ company }}" }}">
                     </div>
 
                     <div>
                         <label>Body Template</label>
-                        <textarea class="large-textarea" name="template_body">Hi {{ first_name }},
+                        <textarea class="large-textarea" name="template_body">Hi {{ "{{ first_name }}" }},
 
-{{ intro_para }}
+{{ "{{ intro_para }}" }}
 
-I’m reaching out because we help {{ audience }} improve CRM follow-up, sales visibility, and client communication.
+I’m reaching out because we help {{ "{{ audience }}" }} improve CRM follow-up, sales visibility, and client communication.
 
-{{ offer }}
+{{ "{{ offer }}" }}
 
-{{ call_to_action }}
+{{ "{{ call_to_action }}" }}
 
 Best,
 Evolution CRM</textarea>
