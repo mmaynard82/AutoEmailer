@@ -367,12 +367,12 @@
                 <div class="form-grid">
                     <div>
                         <label>Brand Voice / Writing Style</label>
-                        <textarea name="brand_voice" placeholder="Example: Warm, direct, brief, consultative. Sound like a real person. Avoid hype. Keep paragraphs short.">{% if organization and organization.brand_voice %}{{ organization.brand_voice }}{% endif %}</textarea>
+                        <textarea name="brand_voice">{% if organization and organization.brand_voice %}{{ organization.brand_voice }}{% endif %}</textarea>
                     </div>
 
                     <div>
                         <label>Avoid Phrases / Style Habits</label>
-                        <textarea name="avoid_phrases" placeholder="Example: Avoid 'I hope this email finds you well,' 'revolutionize,' 'game-changer,' long intros, fake compliments.">{% if organization and organization.avoid_phrases %}{{ organization.avoid_phrases }}{% endif %}</textarea>
+                        <textarea name="avoid_phrases">{% if organization and organization.avoid_phrases %}{{ organization.avoid_phrases }}{% endif %}</textarea>
                     </div>
 
                     <div>
@@ -553,12 +553,11 @@
                         <label>Audience</label>
                         <input type="text" name="audience" value="{{ campaign.audience }}">
                     </div>
-
-                    <div>
-                        <label>Offer</label>
-                        <textarea name="offer" required>{{ campaign.offer }}</textarea>
-                    </div>
                 </div>
+
+                <p class="small">
+                    The campaign offer is set when the campaign is created and is still used by the AI when generating drafts.
+                </p>
 
                 <p>
                     <button type="submit">Save Campaign</button>

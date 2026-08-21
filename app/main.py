@@ -53,10 +53,6 @@ def on_startup():
     create_db_and_tables()
 
 
-# ------------------------------------------------------------
-# Redirect Helper
-# ------------------------------------------------------------
-
 def redirect_with_message(url: str, message: str):
     separator = "&" if "?" in url else "?"
     return RedirectResponse(
@@ -64,10 +60,6 @@ def redirect_with_message(url: str, message: str):
         status_code=303,
     )
 
-
-# ------------------------------------------------------------
-# Auth Helpers
-# ------------------------------------------------------------
 
 def make_auth_token() -> str:
     message = ADMIN_PASSWORD.encode("utf-8")
@@ -105,10 +97,6 @@ def require_admin_login(request: Request):
         raise HTTPException(status_code=403, detail="Admin access required.")
 
 
-# ------------------------------------------------------------
-# Workspace / Organization Helpers
-# ------------------------------------------------------------
-
 def get_current_app_user(
     request: Request,
     session: Session,
@@ -127,10 +115,6 @@ def get_current_organization_id(
     request: Request,
     session: Session,
 ) -> Optional[int]:
-    """
-    Admin returns None, meaning access to all workspaces.
-    Pilot users return their assigned organization_id.
-    """
     if is_admin(request):
         return None
 
@@ -219,11 +203,6 @@ def get_sender_email_for_organization(
     organization_id: Optional[int],
     session: Session,
 ) -> Optional[str]:
-    """
-    Sender priority:
-    1. Organization sender_email
-    2. SES_FROM_EMAIL fallback from env
-    """
     if organization_id:
         organization = session.get(Organization, organization_id)
 
@@ -234,14 +213,6 @@ def get_sender_email_for_organization(
 
 
 def get_reply_to_email_for_sender(sender_email: str) -> str:
-    """
-    Converts controlled SES sender address to the normal reply inbox.
-
-    Example:
-    evan.burns@mail.evolutioncrm.us -> evan.burns@evolutioncrm.us
-    mmaynard@mail.evolutioncrm.us -> mmaynard@evolutioncrm.us
-    """
-
     if not sender_email:
         return sender_email
 
@@ -278,15 +249,7 @@ def get_style_examples_for_organization(
     ]
 
 
-# ------------------------------------------------------------
-# HubSpot Helper
-# ------------------------------------------------------------
-
 def safe_update_hubspot_dnc(email: str):
-    """
-    Updates HubSpot contact status to DNC, but does not break unsubscribe
-    if HubSpot is unavailable, missing the contact, or misconfigured.
-    """
     if not email:
         return {
             "status": "skipped",
@@ -305,10 +268,6 @@ def safe_update_hubspot_dnc(email: str):
         }
 
 
-# ------------------------------------------------------------
-# Unsubscribe Helpers
-# ------------------------------------------------------------
-
 def make_unsubscribe_token(contact_id: int, email: str) -> str:
     message = f"{contact_id}:{email.lower()}".encode("utf-8")
     secret = SECRET_KEY.encode("utf-8")
@@ -324,10 +283,6 @@ def build_unsubscribe_url(contact: Contact) -> str:
     token = make_unsubscribe_token(contact.id, contact.email)
     return f"{APP_BASE_URL}/unsubscribe/{contact.id}/{token}"
 
-
-# ------------------------------------------------------------
-# Login / Logout
-# ------------------------------------------------------------
 
 @app.get("/login")
 def login_page(request: Request):
@@ -351,12 +306,6 @@ def login_submit(
     password: str = Form(...),
     session: Session = Depends(get_session),
 ):
-    """
-    Allows two login paths:
-    1. Admin login using ADMIN_PASSWORD. Email can be blank.
-    2. Pilot login using AppUser email/password.
-    """
-
     if password == ADMIN_PASSWORD:
         response = RedirectResponse(url="/dashboard", status_code=303)
         response.set_cookie(
@@ -437,10 +386,6 @@ def logout():
     response.delete_cookie("ai_emailer_user")
     return response
 
-
-# ------------------------------------------------------------
-# Admin Workspace Management
-# ------------------------------------------------------------
 
 @app.get("/admin/workspaces/new", response_class=HTMLResponse)
 def new_workspace_page(
@@ -563,10 +508,6 @@ def create_workspace(
         f"Workspace created: {workspace.name}. Sender: {workspace.sender_email}. Reply-To: {reply_to_email}.",
     )
 
-
-# ------------------------------------------------------------
-# Admin Pilot User Management
-# ------------------------------------------------------------
 
 @app.get("/admin/pilot-users/new", response_class=HTMLResponse)
 def new_pilot_user_page(
@@ -724,10 +665,6 @@ def create_pilot_user(
     )
 
 
-# ------------------------------------------------------------
-# Public Routes
-# ------------------------------------------------------------
-
 @app.get("/")
 def home(request: Request):
     dashboard_link = "/dashboard" if is_logged_in(request) else "/login"
@@ -737,22 +674,6 @@ def home(request: Request):
         "dashboard": dashboard_link,
         "demo_mode": DEMO_MODE,
         "logged_in_as": current_user_email(request),
-        "next_steps": [
-            "Login",
-            "Create workspace",
-            "Create pilot user",
-            "Create campaign",
-            "Open campaign workspace",
-            "Add/edit email steps",
-            "Upload contacts to a campaign",
-            "Generate drafts",
-            "Edit drafts",
-            "Save strong drafts as style examples",
-            "Approve drafts",
-            "Pick an automation start date",
-            "Turn automation on",
-            "Send manually or through daily cron",
-        ],
     }
 
 
@@ -858,10 +779,6 @@ def unsubscribe_via_link(
     )
 
 
-# ------------------------------------------------------------
-# Send Helper
-# ------------------------------------------------------------
-
 def safe_send_email(
     to_email: str,
     subject: str,
@@ -902,10 +819,6 @@ def safe_send_email(
         "response": response,
     }
 
-
-# ------------------------------------------------------------
-# Campaign Context Helper
-# ------------------------------------------------------------
 
 def build_campaign_context(
     campaign_id: int,
@@ -975,10 +888,6 @@ def build_campaign_context(
 
     return campaign, contacts, steps, draft_rows, stats
 
-
-# ------------------------------------------------------------
-# Dashboard
-# ------------------------------------------------------------
 
 @app.get("/dashboard")
 def dashboard(
@@ -1076,10 +985,6 @@ def dashboard(
         },
     )
 
-
-# ------------------------------------------------------------
-# Campaign Routes
-# ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns")
 def dashboard_create_campaign(
@@ -1192,7 +1097,6 @@ def edit_campaign(
     request: Request,
     name: str = Form(...),
     audience: str = Form("small businesses"),
-    offer: str = Form(...),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
@@ -1201,7 +1105,6 @@ def edit_campaign(
 
     campaign.name = name
     campaign.audience = audience or "small businesses"
-    campaign.offer = offer
 
     session.add(campaign)
     session.commit()
@@ -1257,10 +1160,6 @@ def update_workspace_style_profile(
         "Workspace voice profile saved. Future generated drafts will use this voice.",
     )
 
-
-# ------------------------------------------------------------
-# Email Step Routes
-# ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns/{campaign_id}/steps")
 def add_campaign_step(
@@ -1378,10 +1277,6 @@ def delete_campaign_step(
         "Email step deleted.",
     )
 
-
-# ------------------------------------------------------------
-# Contact Routes
-# ------------------------------------------------------------
 
 @app.post("/dashboard/campaigns/{campaign_id}/contacts/upload")
 async def upload_campaign_contacts(
@@ -1535,10 +1430,6 @@ def delete_contact(
     )
 
 
-# ------------------------------------------------------------
-# HubSpot Routes
-# ------------------------------------------------------------
-
 @app.post("/dashboard/campaigns/{campaign_id}/hubspot/import")
 def import_hubspot_to_campaign(
     campaign_id: int,
@@ -1662,10 +1553,6 @@ def export_campaign_to_hubspot(
         f"HubSpot export complete for {campaign.name}. Created {created}, updated {updated}, skipped {skipped}, failed {failed}.",
     )
 
-
-# ------------------------------------------------------------
-# Draft Routes
-# ------------------------------------------------------------
 
 @app.post("/dashboard/drafts/{draft_id}/delete")
 def delete_single_draft(
@@ -2348,26 +2235,7 @@ def send_campaign_day(
     )
 
 
-# ------------------------------------------------------------
-# Campaign Automation + Delete Routes
-# ------------------------------------------------------------
-
 def draft_is_due_today(contact: Contact, draft: EmailDraft, campaign: Campaign) -> bool:
-    """
-    Determines whether a draft is due.
-
-    Priority:
-    1. If campaign.automation_start_date is set, use that as Day 1.
-    2. Otherwise, use the contact's sequence_started_at date.
-    3. Otherwise, use the contact's created_at date.
-
-    Example:
-    automation_start_date = Sept 1
-    send_day = 1 -> due Sept 1
-    send_day = 3 -> due Sept 3
-    send_day = 7 -> due Sept 7
-    """
-
     if not draft.send_day:
         return False
 
@@ -2490,10 +2358,6 @@ def cron_send_due_emails(
     secret: str = Query(""),
     session: Session = Depends(get_session),
 ):
-    """
-    Called by Render Cron Job once per day.
-    """
-
     if not CRON_SECRET:
         raise HTTPException(status_code=500, detail="CRON_SECRET is not configured.")
 
@@ -2625,10 +2489,6 @@ def cron_send_due_emails(
         "campaigns": campaign_results,
     }
 
-
-# ------------------------------------------------------------
-# Basic API Endpoints
-# ------------------------------------------------------------
 
 @app.post("/campaigns")
 def create_campaign(

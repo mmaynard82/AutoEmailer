@@ -14,12 +14,22 @@ class Organization(SQLModel, table=True):
     sender_email: Optional[str] = None
 
     # Brand voice / style profile used by AI drafting.
-    brand_voice: Optional[str] = None
-    avoid_phrases: Optional[str] = None
-    preferred_cta: Optional[str] = None
+    brand_voice: Optional[str] = (
+        "Warm, direct, brief, and consultative. Sound like a real person, not a sales script. "
+        "Keep paragraphs short. Focus on practical CRM improvement, better follow-up, clearer workflows, "
+        "and helping the business stay organized without adding complexity."
+    )
+
+    avoid_phrases: Optional[str] = (
+        "Avoid: I hope this email finds you well, revolutionize, game-changer, cutting-edge, "
+        "unlock your potential, transform your business, just checking in, circling back, "
+        "fake compliments, long intros, exaggerated claims, and overly formal corporate language."
+    )
+
+    preferred_cta: Optional[str] = "Would it be worth a quick conversation?"
     signature_name: Optional[str] = None
-    signature_title: Optional[str] = None
-    signature_company: Optional[str] = None
+    signature_title: Optional[str] = "CRM Consultant"
+    signature_company: Optional[str] = "Evolution CRM"
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
