@@ -20,6 +20,9 @@ FREE_EMAIL_DOMAINS = {
     "live.com",
     "comcast.net",
     "verizon.net",
+    "att.net",
+    "sbcglobal.net",
+    "me.com",
 }
 
 
@@ -35,47 +38,110 @@ def infer_website_from_email(email: str | None) -> str:
 
     domain = email.split("@")[-1].strip().lower()
 
-    if domain in FREE_EMAIL_DOMAINS:
+    if not domain or domain in FREE_EMAIL_DOMAINS:
         return ""
 
     return f"https://{domain}"
 
 
-def fetch_website_text(website: str | None) -> str:
-    if not website:
-        return ""
-
-    website = website.strip()
+def normalize_website_url(website: str | None) -> str:
+    website = clean_text(website)
 
     if not website:
         return ""
 
-    if not website.startswith("http://") and not website.startswith("https://"):
-        website = "https://" + website
+    if website.startswith("http://") or website.startswith("https://"):
+        return website
 
-    try:
-        response = requests.get(
-            website,
-            timeout=8,
-            headers={
-                "User-Agent": "Mozilla/5.0 AI Emailer Research Bot"
-            },
-        )
+    return f"https://{website}"
 
-        if response.status_code >= 400:
-            return ""
 
-        soup = BeautifulSoup(response.text, "html.parser")
+def fetch_website_text(website: str | None) -> tuple[str, str]:
+    """
+    Returns:
+        website_text, final_url_used
 
-        for tag in soup(["script", "style", "noscript"]):
-            tag.decompose()
+    This tries:
+    1. Provided website
+    2. www version if the first request fails
+    """
 
-        text = " ".join(soup.get_text(separator=" ").split())
-        return text[:3000]
+    website = normalize_website_url(website)
 
-    except Exception as e:
-        print(f"Website fetch failed for {website}: {repr(e)}")
-        return ""
+    if not website:
+        return "", ""
+
+    urls_to_try = [website]
+
+    if "://" in website:
+        scheme, rest = website.split("://", 1)
+
+        if not rest.startswith("www."):
+            urls_to_try.append(f"{scheme}://www.{rest}")
+
+    for url in urls_to_try:
+        try:
+            response = requests.get(
+                url,
+                timeout=10,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/120.0 Safari/537.36"
+                    )
+                },
+                allow_redirects=True,
+            )
+
+            if response.status_code >= 400:
+                print(f"Website fetch returned {response.status_code} for {url}")
+                continue
+
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            for tag in soup(["script", "style", "noscript", "svg", "form"]):
+                tag.decompose()
+
+            title = soup.title.get_text(" ", strip=True) if soup.title else ""
+
+            meta_description = ""
+            meta_tag = soup.find("meta", attrs={"name": "description"})
+
+            if meta_tag and meta_tag.get("content"):
+                meta_description = meta_tag.get("content", "").strip()
+
+            headings = []
+            for heading_tag in soup.find_all(["h1", "h2", "h3"]):
+                heading_text = heading_tag.get_text(" ", strip=True)
+                if heading_text:
+                    headings.append(heading_text)
+
+            page_text = " ".join(soup.get_text(separator=" ").split())
+
+            combined_text = " ".join(
+                part for part in [
+                    title,
+                    meta_description,
+                    " ".join(headings[:12]),
+                    page_text,
+                ]
+                if part
+            )
+
+            combined_text = combined_text.strip()
+
+            if combined_text:
+                print(f"Website scrape successful: {url}")
+                print(f"Website text length: {len(combined_text)}")
+                return combined_text[:5000], url
+
+        except Exception as e:
+            print(f"Website fetch failed for {url}: {repr(e)}")
+            continue
+
+    print(f"Website scrape failed or returned no useful text for: {website}")
+    return "", website
 
 
 def build_fallback_intro(
@@ -91,25 +157,25 @@ def build_fallback_intro(
 
     if company and website_text:
         return (
-            f"I wanted to reach out because businesses like {company} often rely on clear follow-up, organized communication, "
-            f"and a reliable process for keeping track of prospects, customers, and next steps."
+            f"I wanted to reach out because businesses like {company} often depend on organized follow-up, "
+            f"clear communication, and a reliable way to keep track of prospects, customers, and next steps."
         )
 
     if company and industry:
         return (
-            f"I wanted to reach out because {industry.lower()} businesses like {company} often have leads, follow-ups, "
-            f"and customer communication happening across too many places."
+            f"I wanted to reach out because {industry.lower()} businesses like {company} often have leads, "
+            f"follow-ups, and customer communication happening across too many places."
         )
 
     if company:
         return (
-            f"I wanted to reach out because businesses like {company} often have leads, follow-ups, and customer communication "
-            f"spread across too many places."
+            f"I wanted to reach out because businesses like {company} often have leads, follow-ups, "
+            f"and customer communication spread across too many places."
         )
 
     return (
-        "I wanted to reach out because many growing businesses have leads, follow-ups, and customer communication spread across "
-        "too many places."
+        "I wanted to reach out because many growing businesses have leads, follow-ups, "
+        "and customer communication spread across too many places."
     )
 
 
@@ -132,57 +198,6 @@ def build_personal_line(
         return f"I wanted to reach out with a practical idea for {company}."
 
     return "I wanted to reach out with a practical CRM idea."
-
-
-def fallback_render_template(
-    template_subject: str,
-    template_body: str,
-    first_name: str,
-    company: str,
-    offer: str,
-    audience: str,
-    call_to_action: str,
-    intro_para: str,
-    personal_line: str,
-    unsubscribe_url: str,
-) -> dict:
-    replacements = {
-        "{{ first_name }}": first_name or "there",
-        "{first name}": first_name or "there",
-
-        "{{ company }}": company or "your company",
-        "{company}": company or "your company",
-
-        "{{ offer }}": offer or "",
-        "{offer}": offer or "",
-
-        "{{ audience }}": audience or "businesses",
-        "{audience}": audience or "businesses",
-
-        "{{ call_to_action }}": call_to_action or "Would you be open to a quick conversation?",
-        "{call to action}": call_to_action or "Would you be open to a quick conversation?",
-
-        "{{ intro_para }}": intro_para or "",
-        "{intro para}": intro_para or "",
-
-        "{{ personal_line }}": personal_line or "",
-        "{personal line}": personal_line or "",
-
-        "{{ unsubscribe_url }}": unsubscribe_url or "",
-        "{unsubscribe url}": unsubscribe_url or "",
-    }
-
-    subject = template_subject or "Quick question"
-    body = template_body or ""
-
-    for key, value in replacements.items():
-        subject = subject.replace(key, value)
-        body = body.replace(key, value)
-
-    return {
-        "subject": subject.strip(),
-        "body": body.strip(),
-    }
 
 
 def build_style_guidance(
@@ -234,12 +249,71 @@ def build_style_guidance(
 
         if example_texts:
             parts.append(
-                "Use these approved edited examples to match voice, structure, length, warmth, and CTA style. "
+                "Approved edited examples. Use these to match voice, length, warmth, and CTA style. "
                 "Do not copy them word-for-word.\n\n"
                 + "\n\n---\n\n".join(example_texts)
             )
 
     return "\n\n".join(parts).strip()
+
+
+def replace_template_fields(
+    template_subject: str,
+    template_body: str,
+    first_name: str,
+    company: str,
+    offer: str,
+    audience: str,
+    call_to_action: str,
+    intro_para: str,
+    personal_line: str,
+    unsubscribe_url: str,
+) -> dict:
+    replacements = {
+        "{{ first_name }}": first_name or "there",
+        "{first name}": first_name or "there",
+        "{{first_name}}": first_name or "there",
+
+        "{{ company }}": company or "your company",
+        "{company}": company or "your company",
+        "{{company}}": company or "your company",
+
+        "{{ offer }}": offer or "",
+        "{offer}": offer or "",
+        "{{offer}}": offer or "",
+
+        "{{ audience }}": audience or "businesses",
+        "{audience}": audience or "businesses",
+        "{{audience}}": audience or "businesses",
+
+        "{{ call_to_action }}": call_to_action or "Would you be open to a quick conversation?",
+        "{call to action}": call_to_action or "Would you be open to a quick conversation?",
+        "{{call_to_action}}": call_to_action or "Would you be open to a quick conversation?",
+
+        "{{ intro_para }}": intro_para or "",
+        "{intro para}": intro_para or "",
+        "{{intro_para}}": intro_para or "",
+
+        "{{ personal_line }}": personal_line or "",
+        "{personal line}": personal_line or "",
+        "{{personal_line}}": personal_line or "",
+
+        "{{ unsubscribe_url }}": unsubscribe_url or "",
+        "{unsubscribe url}": unsubscribe_url or "",
+        "{{unsubscribe_url}}": unsubscribe_url or "",
+    }
+
+    subject = template_subject or "Quick question"
+    body = template_body or ""
+
+    for key, value in replacements.items():
+        subject = subject.replace(key, value)
+        body = body.replace(key, value)
+
+    return {
+        "subject": subject.strip(),
+        "body": body.strip(),
+    }
 
 
 def extract_section(text: str, section_name: str, next_section_name: str | None = None) -> str:
@@ -257,6 +331,217 @@ def extract_section(text: str, section_name: str, next_section_name: str | None 
         return ""
 
     return match.group(1).strip()
+
+
+def generate_personalized_intro(
+    client,
+    first_name: str,
+    company: str,
+    industry: str,
+    role: str,
+    website: str,
+    website_used: str,
+    website_text: str,
+    offer: str,
+    audience: str,
+    tone: str,
+    fallback_intro: str,
+    brand_voice: str | None = None,
+    avoid_phrases: str | None = None,
+) -> str:
+    """
+    Generates only the intro paragraph.
+    This is intentionally separate from full email generation so {{ intro_para }}
+    is more detailed and less generic.
+    """
+
+    if not client:
+        return fallback_intro
+
+    if not website_text:
+        print("Intro generation: no website text available, using fallback intro.")
+        return fallback_intro
+
+    prompt = f"""
+You are writing ONLY the personalized opening paragraph for a business outreach email.
+
+Write 1 short paragraph, 1-2 sentences maximum.
+
+The paragraph should:
+- Be specific to the company when the website text supports it.
+- Connect naturally to CRM, follow-up, sales visibility, customer communication, estimates, scheduling, workflows, or staying organized.
+- Sound human, warm, direct, and practical.
+- Avoid fake compliments.
+- Avoid "I noticed your work with..."
+- Avoid "I hope this email finds you well."
+- Avoid buzzwords like revolutionize, game-changer, cutting-edge, and unlock your potential.
+- Do not invent facts, awards, clients, locations, years in business, certifications, or services.
+- Do not mention that you scraped or reviewed a website.
+- Do not include a greeting.
+- Do not include a sign-off.
+- Do not include the offer as a sales pitch; just create a relevant bridge to it.
+
+Contact:
+First name: {first_name}
+Company: {company}
+Industry: {industry}
+Role/title: {role}
+
+Website used:
+{website_used or website}
+
+Website text excerpt:
+{website_text}
+
+Campaign audience:
+{audience}
+
+Campaign offer:
+{offer}
+
+Tone:
+{tone}
+
+Brand voice:
+{brand_voice or "Warm, direct, brief, consultative, practical."}
+
+Avoid phrases:
+{avoid_phrases or "Avoid fake compliments, hype, and overly formal corporate language."}
+
+Fallback intro if the website is not useful:
+{fallback_intro}
+
+Return only the paragraph text.
+"""
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt,
+        )
+
+        intro = clean_text(response.text)
+
+        intro = intro.replace("INTRO:", "").strip()
+        intro = intro.replace("Intro:", "").strip()
+
+        if not intro:
+            print("Intro generation returned blank, using fallback intro.")
+            return fallback_intro
+
+        if len(intro) > 700:
+            intro = intro[:700].rsplit(".", 1)[0] + "."
+
+        print(f"Generated intro paragraph: {intro}")
+        return intro
+
+    except Exception as e:
+        print(f"Intro generation failed: {repr(e)}")
+        return fallback_intro
+
+
+def polish_full_email(
+    client,
+    subject: str,
+    body: str,
+    first_name: str,
+    company: str,
+    industry: str,
+    role: str,
+    website_text: str,
+    offer: str,
+    audience: str,
+    tone: str,
+    call_to_action: str,
+    style_guidance: str,
+) -> dict:
+    """
+    Polishes the already-rendered email.
+    The intro_para has already been generated and inserted before this step.
+    """
+
+    if not client:
+        return {
+            "subject": subject.strip(),
+            "body": body.strip(),
+        }
+
+    prompt = f"""
+Polish this business outreach email lightly.
+
+Rules:
+- Keep the personalized intro paragraph specific.
+- Do not replace the intro with a generic opener.
+- Keep the email brief.
+- Keep short paragraphs.
+- Do not add fake details.
+- Do not add claims that are not supported.
+- Preserve the offer and CTA.
+- Preserve any unsubscribe line or unsubscribe URL if present.
+- Do not use "I hope this email finds you well."
+- Do not use hype or buzzwords.
+- Keep the tone: {tone}
+
+Contact:
+First name: {first_name}
+Company: {company}
+Industry: {industry}
+Role/title: {role}
+
+Website text excerpt:
+{website_text[:2500] if website_text else "No useful website text available."}
+
+Campaign:
+Audience: {audience}
+Offer: {offer}
+CTA: {call_to_action}
+
+Style guidance:
+{style_guidance if style_guidance else "No custom style guidance."}
+
+Current subject:
+{subject}
+
+Current body:
+{body}
+
+Return exactly this structure:
+
+SUBJECT:
+<subject here>
+
+BODY:
+<body here>
+"""
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt,
+        )
+
+        text = response.text or ""
+
+        polished_subject = extract_section(text, "SUBJECT", "BODY")
+        polished_body = extract_section(text, "BODY")
+
+        if not polished_subject or not polished_body:
+            return {
+                "subject": subject.strip(),
+                "body": body.strip(),
+            }
+
+        return {
+            "subject": polished_subject.strip(),
+            "body": polished_body.strip(),
+        }
+
+    except Exception as e:
+        print(f"Full email polish failed: {repr(e)}")
+        return {
+            "subject": subject.strip(),
+            "body": body.strip(),
+        }
 
 
 def render_template_email(
@@ -305,7 +590,7 @@ def render_template_email(
     if not website:
         website = infer_website_from_email(email)
 
-    website_text = fetch_website_text(website)
+    website_text, website_used = fetch_website_text(website)
 
     fallback_intro = build_fallback_intro(
         company=company,
@@ -320,21 +605,19 @@ def render_template_email(
         website_text=website_text,
     )
 
-    if not GEMINI_API_KEY:
-        return fallback_render_template(
-            template_subject=template_subject,
-            template_body=template_body,
-            first_name=first_name,
-            company=company,
-            offer=offer,
-            audience=audience,
-            call_to_action=call_to_action,
-            intro_para=fallback_intro,
-            personal_line=fallback_personal_line,
-            unsubscribe_url=unsubscribe_url,
-        )
+    print("AI writer contact context")
+    print(f"Company: {company}")
+    print(f"Email: {email}")
+    print(f"Website input/inferred: {website}")
+    print(f"Website used: {website_used}")
+    print(f"Website text length: {len(website_text)}")
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    client = None
+
+    if GEMINI_API_KEY:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+    else:
+        print("GEMINI_API_KEY missing. Using fallback template rendering.")
 
     style_guidance = build_style_guidance(
         brand_voice=brand_voice,
@@ -346,140 +629,56 @@ def render_template_email(
         style_examples=style_examples,
     )
 
-    prompt = f"""
-You are writing a concise, natural business outreach email.
+    intro_para = generate_personalized_intro(
+        client=client,
+        first_name=first_name,
+        company=company,
+        industry=industry,
+        role=role,
+        website=website,
+        website_used=website_used,
+        website_text=website_text,
+        offer=offer,
+        audience=audience,
+        tone=tone,
+        fallback_intro=fallback_intro,
+        brand_voice=brand_voice,
+        avoid_phrases=avoid_phrases,
+    )
 
-Goal:
-Create a polished email draft using the template and contact details below.
+    rendered = replace_template_fields(
+        template_subject=template_subject,
+        template_body=template_body,
+        first_name=first_name,
+        company=company,
+        offer=offer,
+        audience=audience,
+        call_to_action=call_to_action,
+        intro_para=intro_para,
+        personal_line=fallback_personal_line,
+        unsubscribe_url=unsubscribe_url,
+    )
 
-Most important instruction:
-The placeholder {{ intro_para }} should become a useful personalized opening paragraph, not a generic sentence.
+    subject = rendered["subject"]
+    body = rendered["body"]
 
-Intro paragraph rules:
-- Write a specific 1–2 sentence personalized opening paragraph.
-- Do not use the generic phrase "I noticed your work with [company] and wanted to reach out with a practical idea."
-- If website text is available, use it to infer a relevant business context such as customer communication, scheduling, estimates, lead follow-up, service operations, sales process, or growth needs.
-- Do not invent facts, awards, locations, client names, certifications, or services that are not supported by the contact/company/website data.
-- If the website text is thin or unclear, use a natural industry-relevant opener without pretending to know specifics.
-- The intro should connect naturally to the CRM offer.
+    polished = polish_full_email(
+        client=client,
+        subject=subject,
+        body=body,
+        first_name=first_name,
+        company=company,
+        industry=industry,
+        role=role,
+        website_text=website_text,
+        offer=offer,
+        audience=audience,
+        tone=tone,
+        call_to_action=call_to_action,
+        style_guidance=style_guidance,
+    )
 
-General email rules:
-- Sound human, warm, direct, and not overly salesy.
-- Keep the email brief.
-- Avoid hype and buzzwords.
-- Avoid fake compliments.
-- Avoid "I hope this email finds you well."
-- Avoid overly formal language.
-- Use short paragraphs.
-- Preserve the user's intended offer and call to action.
-- Use the preferred voice profile and examples when provided.
-- Return only the subject and body using the exact format requested below.
-
-Contact:
-First name: {first_name}
-Company: {company}
-Industry: {industry}
-Role/title: {role}
-Email: {email}
-Website: {website}
-
-Website text excerpt:
-{website_text if website_text else "No useful website text was available."}
-
-Campaign:
-Audience: {audience}
-Offer: {offer}
-
-Cadence step:
-Step number: {step_number}
-Step name: {cadence_step_name}
-Step purpose: {cadence_step_purpose}
-Tone: {tone}
-Call to action: {call_to_action}
-
-Template subject:
-{template_subject}
-
-Template body:
-{template_body}
-
-Fallback intro if no useful company details are available:
-{fallback_intro}
-
-Fallback personal line if needed:
-{fallback_personal_line}
-
-Style profile and approved examples:
-{style_guidance if style_guidance else "No custom style profile provided."}
-
-Unsubscribe URL:
-{unsubscribe_url}
-
-Template field instructions:
-- Replace {{ first_name }} with the contact first name.
-- Replace {{ company }} with the company name.
-- Replace {{ audience }} with the campaign audience.
-- Replace {{ offer }} with the campaign offer.
-- Replace {{ call_to_action }} with the call to action.
-- Replace {{ intro_para }} with the personalized opening paragraph.
-- Replace {{ personal_line }} with a short personalized line if used.
-- Replace {{ unsubscribe_url }} with the unsubscribe URL if used.
-- Also support the single-brace versions like {{first name}}, {{company}}, and {{intro para}} if they appear.
-
-Return exactly this structure:
-
-SUBJECT:
-<subject here>
-
-BODY:
-<body here>
-"""
-
-    try:
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt,
-        )
-
-        text = response.text or ""
-
-        subject = extract_section(text, "SUBJECT", "BODY")
-        body = extract_section(text, "BODY")
-
-        if not subject or not body:
-            rendered = fallback_render_template(
-                template_subject=template_subject,
-                template_body=template_body,
-                first_name=first_name,
-                company=company,
-                offer=offer,
-                audience=audience,
-                call_to_action=call_to_action,
-                intro_para=fallback_intro,
-                personal_line=fallback_personal_line,
-                unsubscribe_url=unsubscribe_url,
-            )
-
-            subject = rendered["subject"]
-            body = rendered["body"]
-
-        return {
-            "subject": subject.strip(),
-            "body": body.strip(),
-        }
-
-    except Exception as e:
-        print(f"AI generation failed: {repr(e)}")
-
-        return fallback_render_template(
-            template_subject=template_subject,
-            template_body=template_body,
-            first_name=first_name,
-            company=company,
-            offer=offer,
-            audience=audience,
-            call_to_action=call_to_action,
-            intro_para=fallback_intro,
-            personal_line=fallback_personal_line,
-            unsubscribe_url=unsubscribe_url,
-        )
+    return {
+        "subject": polished["subject"].strip(),
+        "body": polished["body"].strip(),
+    }
