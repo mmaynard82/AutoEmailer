@@ -489,6 +489,147 @@
         </div>
 
         <div class="card">
+            <h2>Email Performance</h2>
+
+            <p class="small">
+                These metrics come from AWS SES event tracking. Opens can be imperfect because some inboxes block images or use privacy tools.
+            </p>
+
+            <div class="stats-grid">
+                <div class="stat">
+                    <div class="number">{{ email_performance.sent }}</div>
+                    <div class="label">Sent</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.delivered }}</div>
+                    <div class="label">Delivered</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.delivery_rate }}%</div>
+                    <div class="label">Delivery Rate</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.bounced }}</div>
+                    <div class="label">Bounced</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.bounce_rate }}%</div>
+                    <div class="label">Bounce Rate</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.complaints }}</div>
+                    <div class="label">Complaints</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.open_rate }}%</div>
+                    <div class="label">Open Rate</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.click_rate }}%</div>
+                    <div class="label">Click Rate</div>
+                </div>
+            </div>
+
+            <div class="stats-grid" style="margin-top: 12px;">
+                <div class="stat">
+                    <div class="number">{{ email_performance.unique_opens }}</div>
+                    <div class="label">Unique Opens</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.opens }}</div>
+                    <div class="label">Total Opens</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.unique_clicks }}</div>
+                    <div class="label">Unique Clicks</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.clicks }}</div>
+                    <div class="label">Total Clicks</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.rejects }}</div>
+                    <div class="label">Rejects</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.delivery_delays }}</div>
+                    <div class="label">Delivery Delays</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.complaint_rate }}%</div>
+                    <div class="label">Complaint Rate</div>
+                </div>
+            </div>
+
+            <h3>Latest Email Events</h3>
+
+            {% if email_performance.latest_events %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Event</th>
+                            <th>Email</th>
+                            <th>Draft</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for event in email_performance.latest_events %}
+                            <tr>
+                                <td>{{ event.event_time }}</td>
+                                <td>
+                                    {% if event.event_type == "Delivery" %}
+                                        <span class="badge green">Delivered</span>
+                                    {% elif event.event_type == "Bounce" %}
+                                        <span class="badge red">Bounce</span>
+                                    {% elif event.event_type == "Complaint" %}
+                                        <span class="badge red">Complaint</span>
+                                    {% elif event.event_type == "Open" %}
+                                        <span class="badge orange">Open</span>
+                                    {% elif event.event_type == "Click" %}
+                                        <span class="badge orange">Click</span>
+                                    {% else %}
+                                        <span class="badge gray">{{ event.event_type }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ event.recipient_email or "" }}</td>
+                                <td>{{ event.draft_id or "" }}</td>
+                                <td>
+                                    {% if event.bounce_type %}
+                                        Bounce type: {{ event.bounce_type }}
+                                    {% elif event.complaint_feedback_type %}
+                                        Complaint: {{ event.complaint_feedback_type }}
+                                    {% elif event.link_url %}
+                                        {{ event.link_url }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>No SES events received yet. After SES/SNS tracking is connected and new tracked emails are sent, events will appear here.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
             <h2>Campaign Automation</h2>
 
             <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/automation">

@@ -8,12 +8,8 @@ class Organization(SQLModel, table=True):
 
     name: str = Field(index=True)
     notes: Optional[str] = None
-
-    # Sender used for this workspace's campaigns.
-    # Example: evan.burns@mail.evolutioncrm.us
     sender_email: Optional[str] = None
 
-    # Brand voice / style profile used by AI drafting.
     brand_voice: Optional[str] = (
         "Warm, direct, brief, and consultative. Sound like a real person, not a sales script. "
         "Keep paragraphs short. Focus on practical CRM improvement, better follow-up, clearer workflows, "
@@ -44,7 +40,6 @@ class AppUser(SQLModel, table=True):
 
     name: Optional[str] = None
     role: str = "pilot"
-
     is_active: bool = True
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -69,9 +64,6 @@ class Contact(SQLModel, table=True):
     suppressed: bool = False
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
-
-    # Used for automated campaign sequencing.
-    # If a campaign automation_start_date is set, that campaign date overrides this.
     sequence_started_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -86,15 +78,9 @@ class Campaign(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-    # Automation controls
     automation_enabled: bool = False
     daily_send_limit: int = 5
-
-    # Optional campaign-level sequence start date.
-    # If set, Day 1 starts on this date for all contacts in the campaign.
-    # If blank, the app falls back to each contact's sequence_started_at date.
     automation_start_date: Optional[date] = None
-
     last_automation_run_at: Optional[datetime] = None
 
 
@@ -148,6 +134,29 @@ class EmailDraft(SQLModel, table=True):
     sent: bool = False
     sent_at: Optional[datetime] = None
 
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class EmailEvent(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    organization_id: Optional[int] = Field(default=None, index=True)
+    campaign_id: Optional[int] = Field(default=None, index=True)
+    contact_id: Optional[int] = Field(default=None, index=True)
+    draft_id: Optional[int] = Field(default=None, index=True)
+
+    message_id: Optional[str] = Field(default=None, index=True)
+    event_type: str = Field(index=True)
+
+    recipient_email: Optional[str] = Field(default=None, index=True)
+
+    bounce_type: Optional[str] = None
+    complaint_feedback_type: Optional[str] = None
+    link_url: Optional[str] = None
+
+    raw_event: Optional[str] = None
+
+    event_time: datetime = Field(default_factory=datetime.utcnow)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

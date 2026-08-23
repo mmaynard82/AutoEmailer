@@ -1,6 +1,8 @@
 import os
 import hmac
 import hashlib
+import json
+import requests
 from datetime import datetime, timedelta
 from typing import List, Optional
 from urllib.parse import quote
@@ -21,6 +23,7 @@ from app.models import (
     Campaign,
     CadenceStep,
     EmailDraft,
+    EmailEvent,
     StyleExample,
     Suppression,
 )
@@ -46,6 +49,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "local-dev-secret")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/")
 DEFAULT_SES_FROM_EMAIL = os.getenv("SES_FROM_EMAIL")
 CRON_SECRET = os.getenv("CRON_SECRET", "")
+SES_EVENT_WEBHOOK_SECRET = os.getenv("SES_EVENT_WEBHOOK_SECRET", "")
 
 
 @app.on_event("startup")
@@ -282,6 +286,179 @@ def verify_unsubscribe_token(contact_id: int, email: str, token: str) -> bool:
 def build_unsubscribe_url(contact: Contact) -> str:
     token = make_unsubscribe_token(contact.id, contact.email)
     return f"{APP_BASE_URL}/unsubscribe/{contact.id}/{token}"
+
+
+def get_message_tag(tags: dict, key: str) -> Optional[int]:
+    value = tags.get(key)
+
+    if isinstance(value, list):
+        value = value[0] if value else None
+
+    if value in [None, "", "None"]:
+        return None
+
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def parse_ses_event_time(value: Optional[str]) -> datetime:
+    if not value:
+        return datetime.utcnow()
+
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+    except Exception:
+        return datetime.utcnow()
+
+
+def get_or_create_email_event(
+    session: Session,
+    event_type: str,
+    message_id: Optional[str],
+    recipient_email: Optional[str],
+    campaign_id: Optional[int],
+    contact_id: Optional[int],
+    draft_id: Optional[int],
+    organization_id: Optional[int],
+    event_time: datetime,
+    raw_event: dict,
+    bounce_type: Optional[str] = None,
+    complaint_feedback_type: Optional[str] = None,
+    link_url: Optional[str] = None,
+) -> EmailEvent:
+    existing = session.exec(
+        select(EmailEvent).where(
+            EmailEvent.message_id == message_id,
+            EmailEvent.event_type == event_type,
+            EmailEvent.recipient_email == recipient_email,
+            EmailEvent.draft_id == draft_id,
+            EmailEvent.event_time == event_time,
+        )
+    ).first()
+
+    if existing:
+        return existing
+
+    email_event = EmailEvent(
+        organization_id=organization_id,
+        campaign_id=campaign_id,
+        contact_id=contact_id,
+        draft_id=draft_id,
+        message_id=message_id,
+        event_type=event_type,
+        recipient_email=recipient_email,
+        bounce_type=bounce_type,
+        complaint_feedback_type=complaint_feedback_type,
+        link_url=link_url,
+        raw_event=json.dumps(raw_event)[:10000],
+        event_time=event_time,
+    )
+
+    session.add(email_event)
+    session.commit()
+    session.refresh(email_event)
+
+    return email_event
+
+
+def suppress_contact_from_event(
+    session: Session,
+    contact_id: Optional[int],
+    organization_id: Optional[int],
+    recipient_email: Optional[str],
+    reason: str,
+):
+    contact = session.get(Contact, contact_id) if contact_id else None
+
+    if not contact and recipient_email:
+        contact = session.exec(
+            select(Contact).where(
+                Contact.email == recipient_email.lower(),
+                Contact.organization_id == organization_id,
+            )
+        ).first()
+
+    if contact:
+        contact.suppressed = True
+        session.add(contact)
+
+    if recipient_email:
+        existing = session.exec(
+            select(Suppression).where(
+                Suppression.email == recipient_email.lower(),
+                Suppression.organization_id == organization_id,
+            )
+        ).first()
+
+        if not existing:
+            suppression = Suppression(
+                organization_id=organization_id,
+                email=recipient_email.lower(),
+                reason=reason,
+            )
+            session.add(suppression)
+
+    session.commit()
+
+
+def calculate_campaign_email_performance(
+    campaign_id: int,
+    session: Session,
+) -> dict:
+    events = session.exec(
+        select(EmailEvent).where(EmailEvent.campaign_id == campaign_id)
+    ).all()
+
+    sent_drafts = session.exec(
+        select(EmailDraft).where(
+            EmailDraft.campaign_id == campaign_id,
+            EmailDraft.sent == True,
+        )
+    ).all()
+
+    sent_count = len(sent_drafts)
+
+    delivery_events = [e for e in events if e.event_type == "Delivery"]
+    bounce_events = [e for e in events if e.event_type == "Bounce"]
+    complaint_events = [e for e in events if e.event_type == "Complaint"]
+    open_events = [e for e in events if e.event_type == "Open"]
+    click_events = [e for e in events if e.event_type == "Click"]
+    reject_events = [e for e in events if e.event_type == "Reject"]
+    delivery_delay_events = [e for e in events if e.event_type == "DeliveryDelay"]
+
+    delivered_unique = len(set(e.draft_id or e.message_id or e.recipient_email for e in delivery_events))
+    bounced_unique = len(set(e.draft_id or e.message_id or e.recipient_email for e in bounce_events))
+    complaint_unique = len(set(e.draft_id or e.message_id or e.recipient_email for e in complaint_events))
+    opened_unique = len(set(e.draft_id or e.message_id or e.recipient_email for e in open_events))
+    clicked_unique = len(set(e.draft_id or e.message_id or e.recipient_email for e in click_events))
+
+    def rate(numerator: int, denominator: int) -> float:
+        if not denominator:
+            return 0.0
+        return round((numerator / denominator) * 100, 1)
+
+    latest_events = sorted(events, key=lambda e: e.event_time, reverse=True)[:20]
+
+    return {
+        "sent": sent_count,
+        "delivered": delivered_unique,
+        "bounced": bounced_unique,
+        "complaints": complaint_unique,
+        "opens": len(open_events),
+        "unique_opens": opened_unique,
+        "clicks": len(click_events),
+        "unique_clicks": clicked_unique,
+        "rejects": len(reject_events),
+        "delivery_delays": len(delivery_delay_events),
+        "delivery_rate": rate(delivered_unique, sent_count),
+        "bounce_rate": rate(bounced_unique, sent_count),
+        "complaint_rate": rate(complaint_unique, sent_count),
+        "open_rate": rate(opened_unique, delivered_unique or sent_count),
+        "click_rate": rate(clicked_unique, delivered_unique or sent_count),
+        "latest_events": latest_events,
+    }
 
 
 @app.get("/login")
@@ -694,6 +871,8 @@ def debug_aws_env(request: Request):
     region = os.getenv("AWS_REGION")
     sender = os.getenv("SES_FROM_EMAIL")
     cron_secret = os.getenv("CRON_SECRET")
+    ses_config_set = os.getenv("SES_CONFIGURATION_SET")
+    ses_webhook_secret = os.getenv("SES_EVENT_WEBHOOK_SECRET")
 
     return {
         "AWS_ACCESS_KEY_ID_present": bool(access_key),
@@ -703,6 +882,180 @@ def debug_aws_env(request: Request):
         "AWS_REGION": region,
         "SES_FROM_EMAIL": sender,
         "CRON_SECRET_present": bool(cron_secret),
+        "SES_CONFIGURATION_SET": ses_config_set,
+        "SES_EVENT_WEBHOOK_SECRET_present": bool(ses_webhook_secret),
+    }
+
+
+@app.post("/webhooks/ses-events")
+async def ses_events_webhook(
+    request: Request,
+    secret: str = Query(""),
+    session: Session = Depends(get_session),
+):
+    if SES_EVENT_WEBHOOK_SECRET:
+        if not hmac.compare_digest(secret, SES_EVENT_WEBHOOK_SECRET):
+            raise HTTPException(status_code=403, detail="Invalid SES webhook secret.")
+
+    payload = await request.json()
+
+    sns_message_type = request.headers.get("x-amz-sns-message-type") or payload.get("Type")
+
+    print(f"SES/SNS webhook received type: {sns_message_type}")
+
+    if sns_message_type == "SubscriptionConfirmation":
+        subscribe_url = payload.get("SubscribeURL")
+
+        if not subscribe_url:
+            raise HTTPException(status_code=400, detail="Missing SubscribeURL.")
+
+        try:
+            response = requests.get(subscribe_url, timeout=10)
+            print(f"SNS subscription confirmation status: {response.status_code}")
+        except Exception as e:
+            print(f"SNS subscription confirmation failed: {repr(e)}")
+            raise HTTPException(status_code=500, detail="Could not confirm SNS subscription.")
+
+        return {
+            "status": "subscription_confirmed",
+        }
+
+    if sns_message_type != "Notification":
+        return {
+            "status": "ignored",
+            "message_type": sns_message_type,
+        }
+
+    message_raw = payload.get("Message")
+
+    if not message_raw:
+        return {
+            "status": "ignored",
+            "reason": "Missing Message.",
+        }
+
+    try:
+        ses_event = json.loads(message_raw)
+    except Exception:
+        print(f"Could not parse SNS Message JSON: {message_raw[:500]}")
+        return {
+            "status": "ignored",
+            "reason": "Message was not valid JSON.",
+        }
+
+    event_type = ses_event.get("eventType") or ses_event.get("notificationType")
+
+    if not event_type:
+        return {
+            "status": "ignored",
+            "reason": "Missing SES event type.",
+        }
+
+    mail = ses_event.get("mail", {})
+    message_id = mail.get("messageId")
+    tags = mail.get("tags", {}) or {}
+
+    campaign_id = get_message_tag(tags, "campaign_id")
+    contact_id = get_message_tag(tags, "contact_id")
+    draft_id = get_message_tag(tags, "draft_id")
+    organization_id = get_message_tag(tags, "organization_id")
+
+    recipients = mail.get("destination") or []
+    recipient_email = recipients[0].lower() if recipients else None
+
+    event_time = parse_ses_event_time(mail.get("timestamp"))
+
+    bounce_type = None
+    complaint_feedback_type = None
+    link_url = None
+
+    if event_type == "Delivery":
+        delivery = ses_event.get("delivery", {})
+        event_time = parse_ses_event_time(delivery.get("timestamp") or mail.get("timestamp"))
+
+    elif event_type == "Bounce":
+        bounce = ses_event.get("bounce", {})
+        bounce_type = bounce.get("bounceType")
+        event_time = parse_ses_event_time(bounce.get("timestamp") or mail.get("timestamp"))
+
+        bounced_recipients = bounce.get("bouncedRecipients") or []
+
+        if bounced_recipients:
+            recipient_email = bounced_recipients[0].get("emailAddress", recipient_email)
+            if recipient_email:
+                recipient_email = recipient_email.lower()
+
+    elif event_type == "Complaint":
+        complaint = ses_event.get("complaint", {})
+        complaint_feedback_type = complaint.get("complaintFeedbackType")
+        event_time = parse_ses_event_time(complaint.get("timestamp") or mail.get("timestamp"))
+
+        complained_recipients = complaint.get("complainedRecipients") or []
+
+        if complained_recipients:
+            recipient_email = complained_recipients[0].get("emailAddress", recipient_email)
+            if recipient_email:
+                recipient_email = recipient_email.lower()
+
+    elif event_type == "Open":
+        open_event = ses_event.get("open", {})
+        event_time = parse_ses_event_time(open_event.get("timestamp") or mail.get("timestamp"))
+
+    elif event_type == "Click":
+        click = ses_event.get("click", {})
+        link_url = click.get("link")
+        event_time = parse_ses_event_time(click.get("timestamp") or mail.get("timestamp"))
+
+    elif event_type == "Reject":
+        reject = ses_event.get("reject", {})
+        event_time = parse_ses_event_time(reject.get("timestamp") or mail.get("timestamp"))
+
+    elif event_type == "DeliveryDelay":
+        delay = ses_event.get("deliveryDelay", {})
+        event_time = parse_ses_event_time(delay.get("timestamp") or mail.get("timestamp"))
+
+    saved_event = get_or_create_email_event(
+        session=session,
+        event_type=event_type,
+        message_id=message_id,
+        recipient_email=recipient_email,
+        campaign_id=campaign_id,
+        contact_id=contact_id,
+        draft_id=draft_id,
+        organization_id=organization_id,
+        event_time=event_time,
+        raw_event=ses_event,
+        bounce_type=bounce_type,
+        complaint_feedback_type=complaint_feedback_type,
+        link_url=link_url,
+    )
+
+    if event_type == "Bounce":
+        suppress_contact_from_event(
+            session=session,
+            contact_id=contact_id,
+            organization_id=organization_id,
+            recipient_email=recipient_email,
+            reason=f"SES bounce: {bounce_type or 'unknown'}",
+        )
+
+    if event_type == "Complaint":
+        suppress_contact_from_event(
+            session=session,
+            contact_id=contact_id,
+            organization_id=organization_id,
+            recipient_email=recipient_email,
+            reason=f"SES complaint: {complaint_feedback_type or 'unknown'}",
+        )
+
+    return {
+        "status": "saved",
+        "event_id": saved_event.id,
+        "event_type": event_type,
+        "campaign_id": campaign_id,
+        "contact_id": contact_id,
+        "draft_id": draft_id,
+        "recipient_email": recipient_email,
     }
 
 
@@ -785,6 +1138,10 @@ def safe_send_email(
     body: str,
     from_email: Optional[str] = None,
     reply_to_email: Optional[str] = None,
+    campaign_id: Optional[int] = None,
+    contact_id: Optional[int] = None,
+    draft_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
 ) -> dict:
     final_sender = from_email or DEFAULT_SES_FROM_EMAIL
     final_reply_to = reply_to_email or final_sender
@@ -798,6 +1155,9 @@ def safe_send_email(
         print(f"Reply-To: {final_reply_to}")
         print(f"To: {to_email}")
         print(f"Subject: {subject}")
+        print(f"Campaign ID: {campaign_id}")
+        print(f"Contact ID: {contact_id}")
+        print(f"Draft ID: {draft_id}")
         print(body)
         print("-" * 50)
 
@@ -812,6 +1172,10 @@ def safe_send_email(
         body=body,
         from_email=final_sender,
         reply_to_email=final_reply_to,
+        campaign_id=campaign_id,
+        contact_id=contact_id,
+        draft_id=draft_id,
+        organization_id=organization_id,
     )
 
     return {
@@ -1070,6 +1434,11 @@ def campaign_detail(
         .order_by(StyleExample.created_at.desc())
     ).all()
 
+    email_performance = calculate_campaign_email_performance(
+        campaign_id=campaign.id,
+        session=session,
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="campaign_detail.html",
@@ -1084,6 +1453,7 @@ def campaign_detail(
             "steps": steps,
             "drafts": draft_rows,
             "stats": stats,
+            "email_performance": email_performance,
             "style_examples": style_examples,
             "current_user": current_user_email(request),
             "is_admin": is_admin(request),
@@ -2086,6 +2456,10 @@ def send_single_draft(
             body=draft.body,
             from_email=sender_email,
             reply_to_email=reply_to_email,
+            campaign_id=draft.campaign_id,
+            contact_id=draft.contact_id,
+            draft_id=draft.id,
+            organization_id=draft.organization_id,
         )
     except Exception as e:
         technical_error = f"{contact.email}: {repr(e)}"
@@ -2199,6 +2573,10 @@ def send_campaign_day(
                     body=draft.body,
                     from_email=sender_email,
                     reply_to_email=reply_to_email,
+                    campaign_id=draft.campaign_id,
+                    contact_id=draft.contact_id,
+                    draft_id=draft.id,
+                    organization_id=draft.organization_id,
                 )
 
                 draft.sent = True
@@ -2450,6 +2828,10 @@ def cron_send_due_emails(
                     body=draft.body,
                     from_email=sender_email,
                     reply_to_email=reply_to_email,
+                    campaign_id=draft.campaign_id,
+                    contact_id=draft.contact_id,
+                    draft_id=draft.id,
+                    organization_id=draft.organization_id,
                 )
 
                 draft.sent = True
