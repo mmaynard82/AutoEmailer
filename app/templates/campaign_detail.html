@@ -109,6 +109,13 @@
             gap: 16px;
         }
 
+        .nav-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
         label {
             display: block;
             font-weight: bold;
@@ -162,6 +169,10 @@
 
         button.orange, .button.orange {
             background: #ea580c;
+        }
+
+        button.purple, .button.purple {
+            background: #7c3aed;
         }
 
         table {
@@ -331,6 +342,11 @@
             </div>
         {% endif %}
 
+        <div class="nav-actions">
+            <a class="button gray" href="/dashboard">Back to Dashboard</a>
+            <a class="button purple" href="/dashboard/campaigns/{{ campaign.id }}/analytics">View Analytics</a>
+        </div>
+
         <div class="sender-box">
             <strong>Workspace:</strong>
             {% if organization %}
@@ -353,92 +369,6 @@
                 {{ reply_to_email }}
             {% else %}
                 No reply-to configured
-            {% endif %}
-        </div>
-
-        <div class="card">
-            <h2>Workspace Voice Profile</h2>
-
-            <p class="small">
-                This helps the AI sound more like you. Future generated drafts will use this profile and saved examples.
-            </p>
-
-            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/style-profile">
-                <div class="form-grid">
-                    <div>
-                        <label>Brand Voice / Writing Style</label>
-                        <textarea name="brand_voice">{% if organization and organization.brand_voice %}{{ organization.brand_voice }}{% endif %}</textarea>
-                    </div>
-
-                    <div>
-                        <label>Avoid Phrases / Style Habits</label>
-                        <textarea name="avoid_phrases">{% if organization and organization.avoid_phrases %}{{ organization.avoid_phrases }}{% endif %}</textarea>
-                    </div>
-
-                    <div>
-                        <label>Preferred CTA</label>
-                        <input type="text" name="preferred_cta" value="{% if organization and organization.preferred_cta %}{{ organization.preferred_cta }}{% endif %}" placeholder="Would it be worth a quick conversation?">
-                    </div>
-
-                    <div>
-                        <label>Signature Name</label>
-                        <input type="text" name="signature_name" value="{% if organization and organization.signature_name %}{{ organization.signature_name }}{% endif %}" placeholder="Michaela Maynard">
-                    </div>
-
-                    <div>
-                        <label>Signature Title</label>
-                        <input type="text" name="signature_title" value="{% if organization and organization.signature_title %}{{ organization.signature_title }}{% endif %}" placeholder="CRM Consultant">
-                    </div>
-
-                    <div>
-                        <label>Signature Company</label>
-                        <input type="text" name="signature_company" value="{% if organization and organization.signature_company %}{{ organization.signature_company }}{% endif %}" placeholder="Evolution CRM">
-                    </div>
-                </div>
-
-                <p>
-                    <button class="green" type="submit">Save Voice Profile</button>
-                </p>
-            </form>
-        </div>
-
-        <div class="card">
-            <h2>Saved Style Examples</h2>
-
-            <p class="small">
-                Save your best edited drafts as examples. Future AI drafts will use these examples to better match your style.
-            </p>
-
-            {% if style_examples %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Label</th>
-                            <th>Subject</th>
-                            <th>Body</th>
-                            <th>Delete</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        {% for example in style_examples %}
-                            <tr>
-                                <td>{{ example.label }}</td>
-                                <td>{{ example.subject }}</td>
-                                <td>
-                                    <div class="email-body">{{ example.body }}</div>
-                                </td>
-                                <td>
-                                    <form method="post" action="/dashboard/style-examples/{{ example.id }}/delete" onsubmit="return confirm('Delete this style example?');">
-                                        <button class="red" type="submit">Delete</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% else %}
-                <p>No style examples saved yet.</p>
             {% endif %}
         </div>
 
@@ -486,147 +416,10 @@
                     <div class="label">Needs Review</div>
                 </div>
             </div>
-        </div>
 
-        <div class="card">
-            <h2>Email Performance</h2>
-
-            <p class="small">
-                These metrics come from AWS SES event tracking. Opens can be imperfect because some inboxes block images or use privacy tools.
+            <p class="small" style="margin-top: 12px;">
+                For delivery, bounce, open, and click rates, use the Analytics page.
             </p>
-
-            <div class="stats-grid">
-                <div class="stat">
-                    <div class="number">{{ email_performance.sent }}</div>
-                    <div class="label">Sent</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.delivered }}</div>
-                    <div class="label">Delivered</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.delivery_rate }}%</div>
-                    <div class="label">Delivery Rate</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.bounced }}</div>
-                    <div class="label">Bounced</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.bounce_rate }}%</div>
-                    <div class="label">Bounce Rate</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.complaints }}</div>
-                    <div class="label">Complaints</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.open_rate }}%</div>
-                    <div class="label">Open Rate</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.click_rate }}%</div>
-                    <div class="label">Click Rate</div>
-                </div>
-            </div>
-
-            <div class="stats-grid" style="margin-top: 12px;">
-                <div class="stat">
-                    <div class="number">{{ email_performance.unique_opens }}</div>
-                    <div class="label">Unique Opens</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.opens }}</div>
-                    <div class="label">Total Opens</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.unique_clicks }}</div>
-                    <div class="label">Unique Clicks</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.clicks }}</div>
-                    <div class="label">Total Clicks</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.rejects }}</div>
-                    <div class="label">Rejects</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.delivery_delays }}</div>
-                    <div class="label">Delivery Delays</div>
-                </div>
-
-                <div class="stat">
-                    <div class="number">{{ email_performance.complaint_rate }}%</div>
-                    <div class="label">Complaint Rate</div>
-                </div>
-            </div>
-
-            <h3>Latest Email Events</h3>
-
-            {% if email_performance.latest_events %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Event</th>
-                            <th>Email</th>
-                            <th>Draft</th>
-                            <th>Details</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        {% for event in email_performance.latest_events %}
-                            <tr>
-                                <td>{{ event.event_time }}</td>
-                                <td>
-                                    {% if event.event_type == "Delivery" %}
-                                        <span class="badge green">Delivered</span>
-                                    {% elif event.event_type == "Bounce" %}
-                                        <span class="badge red">Bounce</span>
-                                    {% elif event.event_type == "Complaint" %}
-                                        <span class="badge red">Complaint</span>
-                                    {% elif event.event_type == "Open" %}
-                                        <span class="badge orange">Open</span>
-                                    {% elif event.event_type == "Click" %}
-                                        <span class="badge orange">Click</span>
-                                    {% else %}
-                                        <span class="badge gray">{{ event.event_type }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ event.recipient_email or "" }}</td>
-                                <td>{{ event.draft_id or "" }}</td>
-                                <td>
-                                    {% if event.bounce_type %}
-                                        Bounce type: {{ event.bounce_type }}
-                                    {% elif event.complaint_feedback_type %}
-                                        Complaint: {{ event.complaint_feedback_type }}
-                                    {% elif event.link_url %}
-                                        {{ event.link_url }}
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% else %}
-                <p>No SES events received yet. After SES/SNS tracking is connected and new tracked emails are sent, events will appear here.</p>
-            {% endif %}
         </div>
 
         <div class="card">
@@ -702,6 +495,52 @@
 
                 <p>
                     <button type="submit">Save Campaign</button>
+                </p>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Workspace Voice Profile</h2>
+
+            <p class="small">
+                This helps the AI sound more like you. Future generated drafts will use this profile and saved examples.
+            </p>
+
+            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/style-profile">
+                <div class="form-grid">
+                    <div>
+                        <label>Brand Voice / Writing Style</label>
+                        <textarea name="brand_voice">{% if organization and organization.brand_voice %}{{ organization.brand_voice }}{% endif %}</textarea>
+                    </div>
+
+                    <div>
+                        <label>Avoid Phrases / Style Habits</label>
+                        <textarea name="avoid_phrases">{% if organization and organization.avoid_phrases %}{{ organization.avoid_phrases }}{% endif %}</textarea>
+                    </div>
+
+                    <div>
+                        <label>Preferred CTA</label>
+                        <input type="text" name="preferred_cta" value="{% if organization and organization.preferred_cta %}{{ organization.preferred_cta }}{% endif %}" placeholder="Would it be worth a quick conversation?">
+                    </div>
+
+                    <div>
+                        <label>Signature Name</label>
+                        <input type="text" name="signature_name" value="{% if organization and organization.signature_name %}{{ organization.signature_name }}{% endif %}" placeholder="Michaela Maynard">
+                    </div>
+
+                    <div>
+                        <label>Signature Title</label>
+                        <input type="text" name="signature_title" value="{% if organization and organization.signature_title %}{{ organization.signature_title }}{% endif %}" placeholder="CRM Consultant">
+                    </div>
+
+                    <div>
+                        <label>Signature Company</label>
+                        <input type="text" name="signature_company" value="{% if organization and organization.signature_company %}{{ organization.signature_company }}{% endif %}" placeholder="Evolution CRM">
+                    </div>
+                </div>
+
+                <p>
+                    <button class="green" type="submit">Save Voice Profile</button>
                 </p>
             </form>
         </div>
@@ -1165,6 +1004,46 @@ Evolution CRM</textarea>
                 </table>
             {% else %}
                 <p>No drafts yet.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Saved Style Examples</h2>
+
+            <p class="small">
+                Save your best edited drafts as examples. Future AI drafts will use these examples to better match your style.
+            </p>
+
+            {% if style_examples %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Label</th>
+                            <th>Subject</th>
+                            <th>Body</th>
+                            <th>Delete</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for example in style_examples %}
+                            <tr>
+                                <td>{{ example.label }}</td>
+                                <td>{{ example.subject }}</td>
+                                <td>
+                                    <div class="email-body">{{ example.body }}</div>
+                                </td>
+                                <td>
+                                    <form method="post" action="/dashboard/style-examples/{{ example.id }}/delete" onsubmit="return confirm('Delete this style example?');">
+                                        <button class="red" type="submit">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>No style examples saved yet.</p>
             {% endif %}
         </div>
 
