@@ -427,6 +427,7 @@ def calculate_campaign_email_performance(
     click_events = [e for e in events if e.event_type == "Click"]
     reject_events = [e for e in events if e.event_type == "Reject"]
     delivery_delay_events = [e for e in events if e.event_type == "DeliveryDelay"]
+    send_events = [e for e in events if e.event_type == "Send"]
 
     delivered_unique = len(set(e.draft_id or e.message_id or e.recipient_email for e in delivery_events))
     bounced_unique = len(set(e.draft_id or e.message_id or e.recipient_email for e in bounce_events))
@@ -443,6 +444,7 @@ def calculate_campaign_email_performance(
 
     return {
         "sent": sent_count,
+        "ses_send_events": len(send_events),
         "delivered": delivered_unique,
         "bounced": bounced_unique,
         "complaints": complaint_unique,
@@ -1434,11 +1436,6 @@ def campaign_detail(
         .order_by(StyleExample.created_at.desc())
     ).all()
 
-    email_performance = calculate_campaign_email_performance(
-        campaign_id=campaign.id,
-        session=session,
-    )
-
     return templates.TemplateResponse(
         request=request,
         name="campaign_detail.html",
@@ -1453,8 +1450,54 @@ def campaign_detail(
             "steps": steps,
             "drafts": draft_rows,
             "stats": stats,
-            "email_performance": email_performance,
             "style_examples": style_examples,
+            "current_user": current_user_email(request),
+            "is_admin": is_admin(request),
+        },
+    )
+
+
+@app.get("/dashboard/campaigns/{campaign_id}/analytics")
+def campaign_analytics(
+    campaign_id: int,
+    request: Request,
+    message: str = "",
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+
+    organization = (
+        session.get(Organization, campaign.organization_id)
+        if campaign.organization_id
+        else None
+    )
+
+    sender_email = (
+        organization.sender_email
+        if organization and organization.sender_email
+        else DEFAULT_SES_FROM_EMAIL
+    )
+
+    reply_to_email = get_reply_to_email_for_sender(sender_email) if sender_email else None
+
+    email_performance = calculate_campaign_email_performance(
+        campaign_id=campaign.id,
+        session=session,
+    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="campaign_analytics.html",
+        context={
+            "message": message,
+            "demo_mode": DEMO_MODE,
+            "campaign": campaign,
+            "organization": organization,
+            "sender_email": sender_email,
+            "reply_to_email": reply_to_email,
+            "email_performance": email_performance,
             "current_user": current_user_email(request),
             "is_admin": is_admin(request),
         },
@@ -1874,7 +1917,7 @@ def export_campaign_to_hubspot(
 ):
     require_dashboard_login(request)
 
-    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+    get_campaign_or_404_for_user(campaign_id, request, session)
 
     contacts = session.exec(
         select(Contact).where(
@@ -1920,7 +1963,7 @@ def export_campaign_to_hubspot(
 
     return redirect_with_message(
         f"/dashboard/campaigns/{campaign_id}",
-        f"HubSpot export complete for {campaign.name}. Created {created}, updated {updated}, skipped {skipped}, failed {failed}.",
+        f"HubSpot export complete. Created {created}, updated {updated}, skipped {skipped}, failed {failed}.",
     )
 
 
@@ -2705,9 +2748,17 @@ def delete_campaign(
         select(StyleExample).where(StyleExample.campaign_id == campaign_id)
     ).all()
 
+    email_events = session.exec(
+        select(EmailEvent).where(EmailEvent.campaign_id == campaign_id)
+    ).all()
+
     draft_count = len(drafts)
     step_count = len(steps)
     contact_count = len(contacts)
+    event_count = len(email_events)
+
+    for event in email_events:
+        session.delete(event)
 
     for example in style_examples:
         session.delete(example)
@@ -2727,7 +2778,7 @@ def delete_campaign(
 
     return redirect_with_message(
         "/dashboard",
-        f"Deleted campaign '{campaign_name}' with {contact_count} contacts, {step_count} steps, and {draft_count} drafts.",
+        f"Deleted campaign '{campaign_name}' with {contact_count} contacts, {step_count} steps, {draft_count} drafts, and {event_count} email events.",
     )
 
 
