@@ -160,21 +160,18 @@ def build_fallback_intro(
 
     if company and industry:
         return (
-            f"I came across {company} while looking at {industry.lower()} organizations that may benefit "
-            f"from a cleaner way to manage customer conversations, follow-up, and next steps."
+            f"I came across {company} while reviewing companies in the {industry.lower()} space and thought "
+            f"this may be worth a quick conversation."
         )
 
     if company:
         return (
-            f"I came across {company} and thought this may be relevant if your team is looking for a cleaner "
-            f"way to manage customer conversations, follow-up, and next steps."
+            f"I came across {company} and thought this may be worth a quick conversation."
         )
 
     return (
-        "I thought this may be relevant if your team is looking for a cleaner way to manage customer conversations, "
-        "follow-up, and next steps."
+        "I thought this may be worth a quick conversation."
     )
-
 
 def build_personal_line(
     company: str = "",
@@ -444,8 +441,6 @@ Return only the paragraph text.
             "i wanted to reach out because",
             "i noticed your work",
             "i hope this email finds you well",
-            "crm follow-up",
-            "organized follow-up, clear communication",
         ]
 
         intro_lower = intro.lower()
