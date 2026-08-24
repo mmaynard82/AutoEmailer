@@ -112,15 +112,18 @@ def fetch_website_text(website: str | None) -> tuple[str, str]:
                 meta_description = meta_tag.get("content", "").strip()
 
             headings = []
+
             for heading_tag in soup.find_all(["h1", "h2", "h3"]):
                 heading_text = heading_tag.get_text(" ", strip=True)
+
                 if heading_text:
                     headings.append(heading_text)
 
             page_text = " ".join(soup.get_text(separator=" ").split())
 
             combined_text = " ".join(
-                part for part in [
+                part
+                for part in [
                     title,
                     meta_description,
                     " ".join(headings[:12]),
@@ -155,27 +158,21 @@ def build_fallback_intro(
     role = clean_text(role)
     website_text = clean_text(website_text)
 
-    if company and website_text:
-        return (
-            f"I wanted to reach out because businesses like {company} often depend on organized follow-up, "
-            f"clear communication, and a reliable way to keep track of prospects, customers, and next steps."
-        )
-
     if company and industry:
         return (
-            f"I wanted to reach out because {industry.lower()} businesses like {company} often have leads, "
-            f"follow-ups, and customer communication happening across too many places."
+            f"I came across {company} while looking at {industry.lower()} organizations that may benefit "
+            f"from a cleaner way to manage customer conversations, follow-up, and next steps."
         )
 
     if company:
         return (
-            f"I wanted to reach out because businesses like {company} often have leads, follow-ups, "
-            f"and customer communication spread across too many places."
+            f"I came across {company} and thought this may be relevant if your team is looking for a cleaner "
+            f"way to manage customer conversations, follow-up, and next steps."
         )
 
     return (
-        "I wanted to reach out because many growing businesses have leads, follow-ups, "
-        "and customer communication spread across too many places."
+        "I thought this may be relevant if your team is looking for a cleaner way to manage customer conversations, "
+        "follow-up, and next steps."
     )
 
 
@@ -189,15 +186,15 @@ def build_personal_line(
     website_text = clean_text(website_text)
 
     if company and website_text:
-        return f"I took a quick look at {company} and wanted to reach out with a practical CRM idea."
+        return f"I came across {company} and thought this may be a practical CRM conversation."
 
     if company and industry:
-        return f"I wanted to reach out with a practical CRM idea for {company}."
+        return f"I thought this may be a practical CRM conversation for {company}."
 
     if company:
-        return f"I wanted to reach out with a practical idea for {company}."
+        return f"I thought this may be a practical idea for {company}."
 
-    return "I wanted to reach out with a practical CRM idea."
+    return "I thought this may be a practical CRM conversation."
 
 
 def build_style_guidance(
@@ -225,8 +222,10 @@ def build_style_guidance(
 
     if signature_name:
         signature_lines.append(signature_name)
+
     if signature_title:
         signature_lines.append(signature_title)
+
     if signature_company:
         signature_lines.append(signature_company)
 
@@ -352,7 +351,7 @@ def generate_personalized_intro(
     """
     Generates only the intro paragraph.
     This is intentionally separate from full email generation so {{ intro_para }}
-    is more detailed and less generic.
+    can use a real company-specific detail when the website supports it.
     """
 
     if not client:
@@ -367,19 +366,29 @@ You are writing ONLY the personalized opening paragraph for a business outreach 
 
 Write 1 short paragraph, 1-2 sentences maximum.
 
-The paragraph should:
-- Be specific to the company when the website text supports it.
-- Connect naturally to CRM, follow-up, sales visibility, customer communication, estimates, scheduling, workflows, or staying organized.
-- Sound human, warm, direct, and practical.
-- Avoid fake compliments.
-- Avoid "I noticed your work with..."
-- Avoid "I hope this email finds you well."
-- Avoid buzzwords like revolutionize, game-changer, cutting-edge, and unlock your potential.
-- Do not invent facts, awards, clients, locations, years in business, certifications, or services.
-- Do not mention that you scraped or reviewed a website.
-- Do not include a greeting.
-- Do not include a sign-off.
-- Do not include the offer as a sales pitch; just create a relevant bridge to it.
+Your job:
+- Use ONE specific detail from the website text.
+- Show that the email is relevant to the company.
+- Do NOT start by pitching CRM.
+- Do NOT make the intro about Evolution CRM.
+- Do NOT repeat the campaign offer.
+- Do NOT use generic phrases such as:
+  "businesses like"
+  "companies like"
+  "I noticed your work"
+  "I wanted to reach out because"
+  "I hope this email finds you well"
+- Do NOT invent facts, awards, clients, locations, years in business, certifications, or services.
+- Do NOT mention that you scraped, reviewed, visited, or looked at the website.
+- Do NOT include a greeting.
+- Do NOT include a sign-off.
+- Keep it natural, brief, and human.
+
+Good intro pattern:
+"I saw that [Company] focuses on [specific thing from website]. That kind of work usually requires clear visibility across prospects, customers, and next steps."
+
+Bad intro pattern:
+"I wanted to reach out because businesses like [Company] often depend on organized follow-up."
 
 Contact:
 First name: {first_name}
@@ -391,7 +400,7 @@ Website used:
 {website_used or website}
 
 Website text excerpt:
-{website_text}
+{website_text[:4500]}
 
 Campaign audience:
 {audience}
@@ -429,8 +438,24 @@ Return only the paragraph text.
             print("Intro generation returned blank, using fallback intro.")
             return fallback_intro
 
-        if len(intro) > 700:
-            intro = intro[:700].rsplit(".", 1)[0] + "."
+        blocked_generic_phrases = [
+            "businesses like",
+            "companies like",
+            "i wanted to reach out because",
+            "i noticed your work",
+            "i hope this email finds you well",
+            "crm follow-up",
+            "organized follow-up, clear communication",
+        ]
+
+        intro_lower = intro.lower()
+
+        if any(phrase in intro_lower for phrase in blocked_generic_phrases):
+            print("Intro generation was too generic, using fallback intro.")
+            return fallback_intro
+
+        if len(intro) > 600:
+            intro = intro[:600].rsplit(".", 1)[0] + "."
 
         print(f"Generated intro paragraph: {intro}")
         return intro
@@ -472,6 +497,11 @@ Polish this business outreach email lightly.
 Rules:
 - Keep the personalized intro paragraph specific.
 - Do not replace the intro with a generic opener.
+- Do not make the intro more salesy.
+- Do not add "I wanted to reach out because."
+- Do not add "businesses like" or "companies like."
+- Do not repeat the same idea twice.
+- If the body already explains CRM pain points, do not add CRM pain points to the intro.
 - Keep the email brief.
 - Keep short paragraphs.
 - Do not add fake details.
