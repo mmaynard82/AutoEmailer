@@ -159,6 +159,18 @@ class EmailEvent(SQLModel, table=True):
     event_time: datetime = Field(default_factory=datetime.utcnow)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+class AutomationLog(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: Optional[int] = Field(default=None, index=True)
+    campaign_id: Optional[int] = Field(default=None, index=True)
+    event_type: str = Field(index=True)
+    message: str
+    drafts_due: int = 0
+    sent_count: int = 0
+    skipped_count: int = 0
+    error_count: int = 0
+    details: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class StyleExample(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -173,6 +185,18 @@ class StyleExample(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+class AutomationLog(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: Optional[int] = Field(default=None, index=True)
+    campaign_id: Optional[int] = Field(default=None, index=True)
+    event_type: str = Field(index=True)
+    message: str
+    drafts_due: int = 0
+    sent_count: int = 0
+    skipped_count: int = 0
+    error_count: int = 0
+    details: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Suppression(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
