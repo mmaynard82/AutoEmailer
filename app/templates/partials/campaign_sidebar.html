@@ -33,9 +33,9 @@
                 Drafts
             </a>
 
-            <a href="#automation"
-               class="{% if active_page == 'automation' %}active{% endif %}">
-                Automation
+            <a href="/dashboard/campaigns/{{ campaign.id }}/automation"
+              class="{% if active_page == 'automation' %}active{% endif %}">
+               Automation
             </a>
 
             <a href="/dashboard/campaigns/{{ campaign.id }}/voice"

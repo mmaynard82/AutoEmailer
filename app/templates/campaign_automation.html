@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ campaign.name }} Automation | AI Emailer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f6f7f9;
+            margin: 0;
+            padding: 0;
+            color: #222;
+        }
+
+        .topbar {
+            background: #111827;
+            color: white;
+            padding: 18px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .topbar h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .topbar a {
+            color: white;
+            text-decoration: none;
+            margin-left: 14px;
+            font-size: 14px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 24px;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            height: fit-content;
+            position: sticky;
+            top: 20px;
+        }
+
+        .sidebar-title h2 {
+            margin: 4px 0 18px 0;
+            font-size: 18px;
+            line-height: 1.25;
+        }
+
+        .small-label {
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 18px;
+        }
+
+        .sidebar-nav a {
+            text-decoration: none;
+            color: #374151;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .sidebar-nav a:hover {
+            background: #f3f4f6;
+        }
+
+        .sidebar-nav a.active {
+            background: #2563eb;
+            color: white;
+        }
+
+        .sidebar-box {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 13px;
+        }
+
+        .sidebar-small {
+            font-size: 12px;
+            color: #4b5563;
+            word-break: break-word;
+        }
+
+        .main-content {
+            min-width: 0;
+        }
+
+        .message {
+            background: #ecfdf5;
+            border-left: 5px solid #047857;
+            padding: 14px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .warning {
+            background: #fff7ed;
+            border-left: 5px solid #ea580c;
+            padding: 14px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            font-size: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(140px, 1fr));
+            gap: 12px;
+        }
+
+        .stat {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            padding: 14px;
+            border-radius: 10px;
+        }
+
+        .stat .number {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .stat .label {
+            color: #6b7280;
+            font-size: 12px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        button, .button {
+            display: inline-block;
+            padding: 9px 13px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 13px;
+            margin: 2px;
+        }
+
+        button.green, .button.green {
+            background: #059669;
+        }
+
+        button.red, .button.red {
+            background: #dc2626;
+        }
+
+        button.orange, .button.orange {
+            background: #ea580c;
+        }
+
+        button.gray, .button.gray {
+            background: #4b5563;
+        }
+
+        .small {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .section-note {
+            background: #f9fafb;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            color: #4b5563;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .status-on {
+            color: #047857;
+            font-weight: bold;
+        }
+
+        .status-off {
+            color: #991b1b;
+            font-weight: bold;
+        }
+
+        @media (max-width: 1100px) {
+            .layout {
+                grid-template-columns: 1fr;
+                padding: 18px;
+            }
+
+            .sidebar {
+                position: static;
+            }
+
+            .stats-grid,
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div>
+            <h1>Automation</h1>
+            <div class="small" style="color: #d1d5db;">
+                {{ campaign.name }}
+                {% if current_user %}
+                    | Logged in as: {{ current_user }}
+                {% endif %}
+                {% if is_admin %}
+                    | Admin
+                {% endif %}
+            </div>
+        </div>
+
+        <div>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/logout">Logout</a>
+        </div>
+    </div>
+
+    {% include "partials/campaign_sidebar.html" %}
+
+        {% if message %}
+            <div class="message">{{ message }}</div>
+        {% endif %}
+
+        {% if demo_mode %}
+            <div class="warning">
+                <strong>Demo mode is ON.</strong>
+                Emails will be previewed but not actually sent.
+            </div>
+        {% endif %}
+
+        <div class="card">
+            <h2>Automation Summary</h2>
+
+            <div class="stats-grid">
+                <div class="stat">
+                    <div class="number">
+                        {% if campaign.automation_enabled %}
+                            <span class="status-on">On</span>
+                        {% else %}
+                            <span class="status-off">Off</span>
+                        {% endif %}
+                    </div>
+                    <div class="label">Automation Status</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ campaign.daily_send_limit or 5 }}</div>
+                    <div class="label">Daily Send Limit</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">
+                        {% if campaign.automation_start_date %}
+                            {{ campaign.automation_start_date }}
+                        {% else %}
+                            Contact Date
+                        {% endif %}
+                    </div>
+                    <div class="label">Day 1 Source</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">
+                        {% if campaign.last_automation_run_at %}
+                            Ran
+                        {% else %}
+                            Not Yet
+                        {% endif %}
+                    </div>
+                    <div class="label">Last Automation Run</div>
+                </div>
+            </div>
+
+            <p class="section-note" style="margin-top: 16px;">
+                Automation sends approved, unsent drafts when the campaign step is due.
+                Drafts must be generated and approved before automation can send them.
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>Campaign Automation Settings</h2>
+
+            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/automation">
+                <div class="form-grid">
+                    <div>
+                        <label>Automation</label>
+                        <select name="automation_enabled">
+                            <option value="">Off</option>
+                            <option value="true" {% if campaign.automation_enabled %}selected{% endif %}>On</option>
+                        </select>
+
+                        <div class="small">
+                            When turned on, the daily cron job can send approved drafts that are due.
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Automation Start Date</label>
+                        <input type="date" name="automation_start_date" value="{% if campaign.automation_start_date %}{{ campaign.automation_start_date }}{% endif %}">
+
+                        <div class="small">
+                            This is the Day 1 date for the whole campaign. Leave blank to use each contact's upload/start date.
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Daily Send Limit</label>
+                        <input type="number" name="daily_send_limit" value="{{ campaign.daily_send_limit or 5 }}" min="1" max="100">
+
+                        <div class="small">
+                            Recommended while warming up: 3 to 5 per day.
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Last Automation Run</label>
+                        <div class="section-note">
+                            {% if campaign.last_automation_run_at %}
+                                {{ campaign.last_automation_run_at }}
+                            {% else %}
+                                Not run yet
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <p>
+                    <button class="green" type="submit">Save Automation Settings</button>
+                </p>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Before Turning Automation On</h2>
+
+            <div class="section-note">
+                Confirm these items before using automation:
+                <br><br>
+
+                1. Contacts are uploaded or imported.
+                <br>
+                2. Email steps are created.
+                <br>
+                3. Drafts are generated.
+                <br>
+                4. Drafts are reviewed and approved.
+                <br>
+                5. Sender email is verified in SES.
+                <br>
+                6. DEMO_MODE is false if you want real sending.
+                <br>
+                7. Render Cron Job is configured with the correct CRON_SECRET.
+            </div>
+
+            <p>
+                <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/contacts">Manage Contacts</a>
+                <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/steps">Manage Email Steps</a>
+                <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/drafts">Manage Drafts</a>
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>How Send Days Work</h2>
+
+            <div class="section-note">
+                If you set an Automation Start Date, that date becomes <strong>Day 1</strong> for the campaign.
+                <br><br>
+
+                Example:
+                <br>
+                Automation Start Date: September 1
+                <br>
+                Step Day 1 sends on September 1.
+                <br>
+                Step Day 3 sends on September 3.
+                <br>
+                Step Day 7 sends on September 7.
+                <br><br>
+
+                If you leave Automation Start Date blank, each contact uses their own sequence start date, usually the upload/import date.
+            </div>
+        </div>
+
+    </main>
+</div>
+
+</body>
+</html>

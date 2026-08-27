@@ -202,10 +202,6 @@
             font-size: 14px;
         }
 
-        textarea {
-            min-height: 90px;
-        }
-
         button, .button {
             display: inline-block;
             padding: 9px 13px;
@@ -259,6 +255,16 @@
         .danger-zone {
             background: #fff1f2;
             border: 1px solid #fecdd3;
+        }
+
+        .status-on {
+            color: #047857;
+            font-weight: bold;
+        }
+
+        .status-off {
+            color: #991b1b;
+            font-weight: bold;
         }
 
         @media (max-width: 1100px) {
@@ -380,6 +386,14 @@
                 </div>
 
                 <div class="quick-card">
+                    <h3>Automation</h3>
+                    <p class="small">
+                        Control campaign automation, start date, daily send limit, and last automation run.
+                    </p>
+                    <a class="button green" href="/dashboard/campaigns/{{ campaign.id }}/automation">Manage Automation</a>
+                </div>
+
+                <div class="quick-card">
                     <h3>Voice Profile</h3>
                     <p class="small">
                         Control AI tone, preferred CTA, signature, avoid phrases, and saved style examples.
@@ -395,55 +409,6 @@
                     <a class="button purple" href="/dashboard/campaigns/{{ campaign.id }}/analytics">View Analytics</a>
                 </div>
             </div>
-        </div>
-
-        <div class="card" id="automation">
-            <h2>Campaign Automation</h2>
-
-            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/automation">
-                <div class="form-grid">
-                    <div>
-                        <label>Automation</label>
-                        <select name="automation_enabled">
-                            <option value="">Off</option>
-                            <option value="true" {% if campaign.automation_enabled %}selected{% endif %}>On</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label>Automation Start Date</label>
-                        <input type="date" name="automation_start_date" value="{% if campaign.automation_start_date %}{{ campaign.automation_start_date }}{% endif %}">
-                        <div class="small">
-                            This is the Day 1 date for this campaign. Leave blank to use each contact's upload date.
-                        </div>
-                    </div>
-
-                    <div>
-                        <label>Daily Send Limit</label>
-                        <input type="number" name="daily_send_limit" value="{{ campaign.daily_send_limit or 5 }}" min="1" max="100">
-                    </div>
-
-                    <div>
-                        <label>Last Automation Run</label>
-                        <div class="section-note">
-                            {% if campaign.last_automation_run_at %}
-                                {{ campaign.last_automation_run_at }}
-                            {% else %}
-                                Not run yet
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-
-                <p>
-                    <button class="green" type="submit">Save Automation Settings</button>
-                </p>
-            </form>
-
-            <p class="small">
-                Automation sends approved, unsent drafts when their send day is due.
-                Drafts must be generated and approved first.
-            </p>
         </div>
 
         <div class="card">
@@ -472,6 +437,32 @@
 
             <a class="button green" href="/dashboard/campaigns/{{ campaign.id }}/drafts">
                 Manage Drafts
+            </a>
+        </div>
+
+        <div class="card">
+            <h2>Automation</h2>
+
+            <p class="section-note">
+                Status:
+                {% if campaign.automation_enabled %}
+                    <span class="status-on">On</span>
+                {% else %}
+                    <span class="status-off">Off</span>
+                {% endif %}
+                |
+                Daily limit: {{ campaign.daily_send_limit or 5 }}
+                |
+                Start date:
+                {% if campaign.automation_start_date %}
+                    {{ campaign.automation_start_date }}
+                {% else %}
+                    Contact upload date
+                {% endif %}
+            </p>
+
+            <a class="button green" href="/dashboard/campaigns/{{ campaign.id }}/automation">
+                Manage Automation
             </a>
         </div>
 
