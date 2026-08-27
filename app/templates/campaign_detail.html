@@ -356,6 +356,14 @@
 
             <div class="quick-actions">
                 <div class="quick-card">
+                    <h3>Contacts</h3>
+                    <p class="small">
+                        Upload contacts, import/export with HubSpot, suppress contacts, and manage campaign recipients.
+                    </p>
+                    <a class="button" href="/dashboard/campaigns/{{ campaign.id }}/contacts">Manage Contacts</a>
+                </div>
+
+                <div class="quick-card">
                     <h3>Email Steps</h3>
                     <p class="small">
                         Build your sequence, campaign offer, subject templates, body templates, tone, and CTA.
@@ -430,17 +438,8 @@
             </p>
         </div>
 
-        <div class="card" id="contacts">
+        <div class="card">
             <h2>Contacts</h2>
-
-            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/contacts/upload" enctype="multipart/form-data">
-                <label>Upload CSV</label>
-                <input type="file" name="file" accept=".csv" required>
-
-                <p>
-                    <button type="submit">Upload Contacts</button>
-                </p>
-            </form>
 
             <p class="section-note">
                 Current contacts: {{ stats.contacts }} |
@@ -448,10 +447,9 @@
                 Suppressed: {{ stats.suppressed_contacts }}
             </p>
 
-            <p class="small">
-                Optional CSV columns: first_name, last_name, email, company, industry, role, website.
-                If website is missing, the AI writer will try to infer the company website from the contact’s email domain.
-            </p>
+            <a class="button" href="/dashboard/campaigns/{{ campaign.id }}/contacts">
+                Manage Contacts
+            </a>
         </div>
 
         <div class="card">
