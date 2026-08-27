@@ -380,6 +380,14 @@
                 </div>
 
                 <div class="quick-card">
+                    <h3>Voice Profile</h3>
+                    <p class="small">
+                        Control AI tone, preferred CTA, signature, avoid phrases, and saved style examples.
+                    </p>
+                    <a class="button orange" href="/dashboard/campaigns/{{ campaign.id }}/voice">Manage Voice Profile</a>
+                </div>
+
+                <div class="quick-card">
                     <h3>Analytics</h3>
                     <p class="small">
                         View delivery, bounce, complaint, open, click, and SES event tracking.
@@ -467,50 +475,16 @@
             </a>
         </div>
 
-        <div class="card" id="voice">
+        <div class="card">
             <h2>Voice Profile</h2>
 
-            <p class="small">
-                This helps the AI sound more like you. Future generated drafts will use this profile and saved examples.
+            <p class="section-note">
+                Controls the AI writing style for this workspace, including tone, avoided phrases, preferred CTA, signature, and saved examples.
             </p>
 
-            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/style-profile">
-                <div class="form-grid">
-                    <div>
-                        <label>Brand Voice / Writing Style</label>
-                        <textarea name="brand_voice">{% if organization and organization.brand_voice %}{{ organization.brand_voice }}{% endif %}</textarea>
-                    </div>
-
-                    <div>
-                        <label>Avoid Phrases / Style Habits</label>
-                        <textarea name="avoid_phrases">{% if organization and organization.avoid_phrases %}{{ organization.avoid_phrases }}{% endif %}</textarea>
-                    </div>
-
-                    <div>
-                        <label>Preferred CTA</label>
-                        <input type="text" name="preferred_cta" value="{% if organization and organization.preferred_cta %}{{ organization.preferred_cta }}{% endif %}">
-                    </div>
-
-                    <div>
-                        <label>Signature Name</label>
-                        <input type="text" name="signature_name" value="{% if organization and organization.signature_name %}{{ organization.signature_name }}{% endif %}">
-                    </div>
-
-                    <div>
-                        <label>Signature Title</label>
-                        <input type="text" name="signature_title" value="{% if organization and organization.signature_title %}{{ organization.signature_title }}{% endif %}">
-                    </div>
-
-                    <div>
-                        <label>Signature Company</label>
-                        <input type="text" name="signature_company" value="{% if organization and organization.signature_company %}{{ organization.signature_company }}{% endif %}">
-                    </div>
-                </div>
-
-                <p>
-                    <button class="green" type="submit">Save Voice Profile</button>
-                </p>
-            </form>
+            <a class="button orange" href="/dashboard/campaigns/{{ campaign.id }}/voice">
+                Manage Voice Profile
+            </a>
         </div>
 
         <div class="card danger-zone">

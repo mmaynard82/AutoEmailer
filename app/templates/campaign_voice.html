@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ campaign.name }} Voice Profile | AI Emailer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f6f7f9;
+            margin: 0;
+            padding: 0;
+            color: #222;
+        }
+
+        .topbar {
+            background: #111827;
+            color: white;
+            padding: 18px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .topbar h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .topbar a {
+            color: white;
+            text-decoration: none;
+            margin-left: 14px;
+            font-size: 14px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 24px;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            height: fit-content;
+            position: sticky;
+            top: 20px;
+        }
+
+        .sidebar-title h2 {
+            margin: 4px 0 18px 0;
+            font-size: 18px;
+            line-height: 1.25;
+        }
+
+        .small-label {
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 18px;
+        }
+
+        .sidebar-nav a {
+            text-decoration: none;
+            color: #374151;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .sidebar-nav a:hover {
+            background: #f3f4f6;
+        }
+
+        .sidebar-nav a.active {
+            background: #2563eb;
+            color: white;
+        }
+
+        .sidebar-box {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 13px;
+        }
+
+        .sidebar-small {
+            font-size: 12px;
+            color: #4b5563;
+            word-break: break-word;
+        }
+
+        .main-content {
+            min-width: 0;
+        }
+
+        .message {
+            background: #ecfdf5;
+            border-left: 5px solid #047857;
+            padding: 14px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .warning {
+            background: #fff7ed;
+            border-left: 5px solid #ea580c;
+            padding: 14px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            font-size: 20px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        textarea {
+            min-height: 120px;
+        }
+
+        button, .button {
+            display: inline-block;
+            padding: 9px 13px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 13px;
+            margin: 2px;
+        }
+
+        button.green, .button.green {
+            background: #059669;
+        }
+
+        button.red, .button.red {
+            background: #dc2626;
+        }
+
+        button.orange, .button.orange {
+            background: #ea580c;
+        }
+
+        button.gray, .button.gray {
+            background: #4b5563;
+        }
+
+        .small {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .section-note {
+            background: #f9fafb;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            color: #4b5563;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .email-body {
+            white-space: pre-wrap;
+            max-width: 640px;
+            font-size: 12px;
+            line-height: 1.4;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            padding: 10px;
+            border-radius: 6px;
+            max-height: 240px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            background: #f3f4f6;
+            text-align: left;
+            padding: 9px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 12px;
+        }
+
+        td {
+            padding: 9px;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+
+        @media (max-width: 1100px) {
+            .layout {
+                grid-template-columns: 1fr;
+                padding: 18px;
+            }
+
+            .sidebar {
+                position: static;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            table {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div>
+            <h1>Voice Profile</h1>
+            <div class="small" style="color: #d1d5db;">
+                {{ campaign.name }}
+                {% if current_user %}
+                    | Logged in as: {{ current_user }}
+                {% endif %}
+                {% if is_admin %}
+                    | Admin
+                {% endif %}
+            </div>
+        </div>
+
+        <div>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/logout">Logout</a>
+        </div>
+    </div>
+
+    {% include "partials/campaign_sidebar.html" %}
+
+        {% if message %}
+            <div class="message">{{ message }}</div>
+        {% endif %}
+
+        {% if demo_mode %}
+            <div class="warning">
+                <strong>Demo mode is ON.</strong>
+                Emails will be previewed but not actually sent.
+            </div>
+        {% endif %}
+
+        <div class="card">
+            <h2>Workspace Voice Profile</h2>
+
+            <p class="section-note">
+                These settings help the AI write drafts in the preferred voice for this workspace. Future generated drafts will use this profile along with saved style examples.
+            </p>
+
+            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/style-profile">
+                <div class="form-grid">
+                    <div>
+                        <label>Brand Voice / Writing Style</label>
+                        <textarea name="brand_voice" placeholder="Example: Warm, direct, brief, consultative, and practical. Sound like a real person, not a sales script.">{% if organization and organization.brand_voice %}{{ organization.brand_voice }}{% endif %}</textarea>
+                    </div>
+
+                    <div>
+                        <label>Avoid Phrases / Style Habits</label>
+                        <textarea name="avoid_phrases" placeholder="Example: Avoid hype, buzzwords, fake compliments, overly formal intros, and phrases like I hope this email finds you well.">{% if organization and organization.avoid_phrases %}{{ organization.avoid_phrases }}{% endif %}</textarea>
+                    </div>
+
+                    <div>
+                        <label>Preferred CTA</label>
+                        <input type="text" name="preferred_cta" value="{% if organization and organization.preferred_cta %}{{ organization.preferred_cta }}{% endif %}" placeholder="Would it be worth a quick conversation?">
+                    </div>
+
+                    <div>
+                        <label>Signature Name</label>
+                        <input type="text" name="signature_name" value="{% if organization and organization.signature_name %}{{ organization.signature_name }}{% endif %}" placeholder="Evan Burns">
+                    </div>
+
+                    <div>
+                        <label>Signature Title</label>
+                        <input type="text" name="signature_title" value="{% if organization and organization.signature_title %}{{ organization.signature_title }}{% endif %}" placeholder="President & CEO">
+                    </div>
+
+                    <div>
+                        <label>Signature Company</label>
+                        <input type="text" name="signature_company" value="{% if organization and organization.signature_company %}{{ organization.signature_company }}{% endif %}" placeholder="Evolution CRM">
+                    </div>
+                </div>
+
+                <p>
+                    <button class="green" type="submit">Save Voice Profile</button>
+                </p>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>How This Improves Drafts</h2>
+
+            <div class="section-note">
+                <strong>Brand Voice</strong> tells the AI how the outreach should sound.
+                <br><br>
+                <strong>Avoid Phrases</strong> helps prevent generic AI language, hype, and overused sales openers.
+                <br><br>
+                <strong>Preferred CTA</strong> gives the AI a consistent call-to-action style.
+                <br><br>
+                <strong>Saved Style Examples</strong> are edited drafts that future drafts can use as examples for tone, length, structure, and wording.
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Saved Style Examples</h2>
+
+            <p class="small">
+                Save your best edited drafts as style examples from the Drafts page. Future AI drafts will use these examples to better match your preferred writing style.
+            </p>
+
+            {% if style_examples %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Label</th>
+                            <th>Subject</th>
+                            <th>Body</th>
+                            <th>Delete</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for example in style_examples %}
+                            <tr>
+                                <td>{{ example.label }}</td>
+                                <td>{{ example.subject }}</td>
+                                <td>
+                                    <div class="email-body">{{ example.body }}</div>
+                                </td>
+                                <td>
+                                    <form method="post" action="/dashboard/style-examples/{{ example.id }}/delete" onsubmit="return confirm('Delete this style example?');">
+                                        <button class="red" type="submit">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>No style examples saved yet.</p>
+
+                <div class="section-note">
+                    To add one, go to the Drafts page, edit a draft so it sounds right, then click <strong>Save as Style Example</strong>.
+                </div>
+
+                <p>
+                    <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/drafts">Go to Drafts</a>
+                </p>
+            {% endif %}
+        </div>
+
+    </main>
+</div>
+
+</body>
+</html>
