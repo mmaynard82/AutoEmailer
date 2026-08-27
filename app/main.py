@@ -11,6 +11,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Request, Form, Query
 from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from passlib.context import CryptContext
 from sqlmodel import Session, select
@@ -39,6 +40,8 @@ from app.hubspot_client import (
 load_dotenv()
 
 app = FastAPI(title="AI Emailer MVP")
+
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 templates = Jinja2Templates(directory="app/templates")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
