@@ -1,0 +1,14 @@
+<div class="card">
+    <h2>Drafts</h2>
+
+    <p class="section-note">
+        Drafts: {{ stats.drafts }} |
+        Approved: {{ stats.approved }} |
+        Needs Review: {{ stats.unapproved }} |
+        Sent: {{ stats.sent }}
+    </p>
+
+    <a class="button" href="/dashboard/campaigns/{{ campaign.id }}/drafts">
+        Manage Drafts
+    </a>
+</div>
