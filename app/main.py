@@ -2231,7 +2231,54 @@ def delete_style_example(
         "/dashboard",
         "Style example deleted.",
     )
+@app.get("/dashboard/campaigns/{campaign_id}/contacts")
+def campaign_contacts_page(
+    campaign_id: int,
+    request: Request,
+    message: str = "",
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
 
+    campaign, contacts, steps, draft_rows, stats = build_campaign_context(
+        campaign_id,
+        request,
+        session,
+    )
+
+    organization = (
+        session.get(Organization, campaign.organization_id)
+        if campaign.organization_id
+        else None
+    )
+
+    sender_email = (
+        organization.sender_email
+        if organization and organization.sender_email
+        else DEFAULT_SES_FROM_EMAIL
+    )
+
+    reply_to_email = get_reply_to_email_for_sender(sender_email) if sender_email else None
+
+    return templates.TemplateResponse(
+        request=request,
+        name="campaign_contacts.html",
+        context={
+            "message": message,
+            "demo_mode": DEMO_MODE,
+            "campaign": campaign,
+            "organization": organization,
+            "sender_email": sender_email,
+            "reply_to_email": reply_to_email,
+            "contacts": contacts,
+            "steps": steps,
+            "drafts": draft_rows,
+            "stats": stats,
+            "active_page": "contacts",
+            "current_user": current_user_email(request),
+            "is_admin": is_admin(request),
+        },
+    )
 
 @app.post("/dashboard/campaigns/{campaign_id}/drafts/generate")
 def generate_campaign_drafts(
