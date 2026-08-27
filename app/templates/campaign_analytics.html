@@ -32,10 +32,80 @@
             font-size: 14px;
         }
 
-        .container {
-            padding: 30px;
-            max-width: 1500px;
+        .layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 24px;
+            max-width: 1600px;
             margin: 0 auto;
+            padding: 24px;
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            height: fit-content;
+            position: sticky;
+            top: 20px;
+        }
+
+        .sidebar-title h2 {
+            margin: 4px 0 18px 0;
+            font-size: 18px;
+            line-height: 1.25;
+        }
+
+        .small-label {
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 18px;
+        }
+
+        .sidebar-nav a {
+            text-decoration: none;
+            color: #374151;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .sidebar-nav a:hover {
+            background: #f3f4f6;
+        }
+
+        .sidebar-nav a.active {
+            background: #2563eb;
+            color: white;
+        }
+
+        .sidebar-box {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 13px;
+        }
+
+        .sidebar-small {
+            font-size: 12px;
+            color: #4b5563;
+            word-break: break-word;
+        }
+
+        .main-content {
+            min-width: 0;
         }
 
         .message {
@@ -67,9 +137,13 @@
             font-size: 20px;
         }
 
+        .card h3 {
+            margin-bottom: 8px;
+        }
+
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(8, minmax(110px, 1fr));
+            grid-template-columns: repeat(4, minmax(140px, 1fr));
             gap: 12px;
         }
 
@@ -81,7 +155,7 @@
         }
 
         .stat .number {
-            font-size: 22px;
+            font-size: 24px;
             font-weight: bold;
             margin-bottom: 4px;
         }
@@ -91,11 +165,28 @@
             font-size: 12px;
         }
 
-        .nav-actions {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
+        .small {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .section-note {
+            background: #f9fafb;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            color: #4b5563;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .sender-box {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            padding: 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
         }
 
         button, .button {
@@ -112,12 +203,24 @@
             margin: 2px;
         }
 
-        .button.gray {
+        .button.gray, button.gray {
             background: #4b5563;
         }
 
-        .button.purple {
+        .button.purple, button.purple {
             background: #7c3aed;
+        }
+
+        .button.green, button.green {
+            background: #059669;
+        }
+
+        .button.red, button.red {
+            background: #dc2626;
+        }
+
+        .button.orange, button.orange {
+            background: #ea580c;
         }
 
         table {
@@ -138,30 +241,6 @@
             padding: 9px;
             border-bottom: 1px solid #e5e7eb;
             vertical-align: top;
-        }
-
-        .small {
-            font-size: 12px;
-            color: #6b7280;
-            line-height: 1.4;
-        }
-
-        .sender-box {
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
-            padding: 14px;
-            border-radius: 8px;
-            margin-bottom: 16px;
-        }
-
-        .section-note {
-            background: #f9fafb;
-            padding: 12px;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-            color: #4b5563;
-            font-size: 13px;
-            line-height: 1.5;
         }
 
         .badge {
@@ -197,20 +276,30 @@
             color: #1e40af;
         }
 
-        .metric-explain {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px;
+        .badge.purple {
+            background: #ede9fe;
+            color: #5b21b6;
+        }
+
+        .event-detail {
+            max-width: 380px;
+            word-break: break-word;
+            color: #4b5563;
+            font-size: 12px;
         }
 
         @media (max-width: 1100px) {
-            .stats-grid,
-            .metric-explain {
+            .layout {
                 grid-template-columns: 1fr;
+                padding: 18px;
             }
 
-            .container {
-                padding: 18px;
+            .sidebar {
+                position: static;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
             }
 
             table {
@@ -223,9 +312,12 @@
 <body>
     <div class="topbar">
         <div>
-            <h1>{{ campaign.name }} Analytics</h1>
+            <h1>Analytics</h1>
             <div class="small" style="color: #d1d5db;">
-                Logged in as: {{ current_user }}
+                {{ campaign.name }}
+                {% if current_user %}
+                    | Logged in as: {{ current_user }}
+                {% endif %}
                 {% if is_admin %}
                     | Admin
                 {% endif %}
@@ -238,7 +330,8 @@
         </div>
     </div>
 
-    <div class="container">
+    {% include "partials/campaign_sidebar.html" %}
+
         {% if message %}
             <div class="message">{{ message }}</div>
         {% endif %}
@@ -246,124 +339,117 @@
         {% if demo_mode %}
             <div class="warning">
                 <strong>Demo mode is ON.</strong>
-                Emails will be previewed but not actually sent. SES analytics will not update in demo mode.
+                Emails will be previewed but not actually sent.
             </div>
         {% endif %}
-
-        <div class="nav-actions">
-            <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}">Back to Campaign</a>
-            <a class="button gray" href="/dashboard">Dashboard</a>
-        </div>
-
-        <div class="sender-box">
-            <strong>Workspace:</strong>
-            {% if organization %}
-                {{ organization.name }}
-            {% else %}
-                No workspace
-            {% endif %}
-            <br>
-
-            <strong>Sender:</strong>
-            {% if sender_email %}
-                {{ sender_email }}
-            {% else %}
-                No sender configured
-            {% endif %}
-            <br>
-
-            <strong>Reply-To:</strong>
-            {% if reply_to_email %}
-                {{ reply_to_email }}
-            {% else %}
-                No reply-to configured
-            {% endif %}
-        </div>
 
         <div class="card">
             <h2>Email Performance</h2>
 
-            <p class="small">
-                These metrics come from AWS SES event tracking. New emails must be sent after SES tracking is connected.
-                Older emails may not have campaign/draft/contact tags.
-            </p>
+            <div class="sender-box">
+                <strong>Workspace:</strong>
+                {% if organization %}
+                    {{ organization.name }}
+                {% else %}
+                    No workspace
+                {% endif %}
+                <br>
+
+                <strong>Sender:</strong>
+                {% if sender_email %}
+                    {{ sender_email }}
+                {% else %}
+                    No sender configured
+                {% endif %}
+                <br>
+
+                <strong>Reply-To:</strong>
+                {% if reply_to_email %}
+                    {{ reply_to_email }}
+                {% else %}
+                    No reply-to configured
+                {% endif %}
+            </div>
 
             <div class="stats-grid">
                 <div class="stat">
-                    <div class="number">{{ email_performance.sent }}</div>
+                    <div class="number">{{ email_performance.sent_count or 0 }}</div>
                     <div class="label">Sent</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.delivered }}</div>
+                    <div class="number">{{ email_performance.delivery_count or 0 }}</div>
                     <div class="label">Delivered</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.delivery_rate }}%</div>
+                    <div class="number">{{ email_performance.delivery_rate or "0%" }}</div>
                     <div class="label">Delivery Rate</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.bounced }}</div>
+                    <div class="number">{{ email_performance.bounce_count or 0 }}</div>
                     <div class="label">Bounced</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.bounce_rate }}%</div>
+                    <div class="number">{{ email_performance.bounce_rate or "0%" }}</div>
                     <div class="label">Bounce Rate</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.complaints }}</div>
+                    <div class="number">{{ email_performance.complaint_count or 0 }}</div>
                     <div class="label">Complaints</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.complaint_rate }}%</div>
+                    <div class="number">{{ email_performance.complaint_rate or "0%" }}</div>
                     <div class="label">Complaint Rate</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.rejects }}</div>
+                    <div class="number">{{ email_performance.reject_count or 0 }}</div>
                     <div class="label">Rejects</div>
                 </div>
-            </div>
 
-            <div class="stats-grid" style="margin-top: 12px;">
                 <div class="stat">
-                    <div class="number">{{ email_performance.open_rate }}%</div>
+                    <div class="number">{{ email_performance.open_rate or "0%" }}</div>
                     <div class="label">Open Rate</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.unique_opens }}</div>
+                    <div class="number">{{ email_performance.unique_open_count or 0 }}</div>
                     <div class="label">Unique Opens</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.opens }}</div>
+                    <div class="number">{{ email_performance.open_count or 0 }}</div>
                     <div class="label">Total Opens</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.click_rate }}%</div>
+                    <div class="number">{{ email_performance.click_rate or "0%" }}</div>
                     <div class="label">Click Rate</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.unique_clicks }}</div>
+                    <div class="number">{{ email_performance.unique_click_count or 0 }}</div>
                     <div class="label">Unique Clicks</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.clicks }}</div>
+                    <div class="number">{{ email_performance.click_count or 0 }}</div>
                     <div class="label">Total Clicks</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ email_performance.delivery_delays }}</div>
+                    <div class="number">{{ email_performance.delivery_delay_count or 0 }}</div>
                     <div class="label">Delivery Delays</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ email_performance.rendering_failure_count or 0 }}</div>
+                    <div class="label">Rendering Failures</div>
                 </div>
             </div>
         </div>
@@ -371,108 +457,113 @@
         <div class="card">
             <h2>How to Read These Metrics</h2>
 
-            <div class="metric-explain">
-                <div class="section-note">
-                    <strong>Most important for deliverability</strong><br>
-                    Watch bounces and complaints first. High bounce or complaint rates can hurt sender reputation.
-                    Contacts who bounce or complain should be automatically suppressed by the webhook.
-                </div>
+            <div class="section-note">
+                <strong>Delivered</strong> means SES received a delivery confirmation from the receiving mail server.
+                <br><br>
 
-                <div class="section-note">
-                    <strong>Opens are helpful but imperfect</strong><br>
-                    Open tracking depends on images/tracking pixels. Apple Mail privacy tools, image blocking, and security scanners can make open data incomplete or inflated.
-                </div>
+                <strong>Bounces and complaints</strong> matter most for sender reputation. Your app should suppress contacts after a bounce or complaint.
+                <br><br>
 
-                <div class="section-note">
-                    <strong>Click rate is more useful than open rate</strong><br>
-                    Clicks usually show stronger engagement than opens. To test clicks, include a real link in the email body.
-                </div>
+                <strong>Open rate</strong> is helpful but imperfect because Apple Mail Privacy Protection, Gmail image blocking, and other privacy tools can inflate or hide opens.
+                <br><br>
 
-                <div class="section-note">
-                    <strong>Delivery does not always mean inbox</strong><br>
-                    Delivered means the receiving mail server accepted the message. It does not guarantee inbox placement instead of spam.
-                </div>
+                <strong>Click rate</strong> only appears when SES click tracking is active and the email contains trackable links.
             </div>
         </div>
 
         <div class="card">
             <h2>Latest Email Events</h2>
 
-            {% if email_performance.latest_events %}
+            {% if email_performance.events %}
                 <table>
                     <thead>
                         <tr>
                             <th>Time</th>
                             <th>Event</th>
-                            <th>Email</th>
-                            <th>Draft ID</th>
+                            <th>Recipient</th>
                             <th>Message ID</th>
                             <th>Details</th>
                         </tr>
                     </thead>
 
                     <tbody>
-                        {% for event in email_performance.latest_events %}
+                        {% for event in email_performance.events %}
                             <tr>
-                                <td>{{ event.event_time }}</td>
+                                <td>
+                                    {% if event.event_time %}
+                                        {{ event.event_time }}
+                                    {% else %}
+                                        {{ event.created_at }}
+                                    {% endif %}
+                                </td>
 
                                 <td>
                                     {% if event.event_type == "Delivery" %}
-                                        <span class="badge green">Delivered</span>
+                                        <span class="badge green">Delivery</span>
+                                    {% elif event.event_type == "Send" %}
+                                        <span class="badge blue">Send</span>
+                                    {% elif event.event_type == "Open" %}
+                                        <span class="badge purple">Open</span>
+                                    {% elif event.event_type == "Click" %}
+                                        <span class="badge purple">Click</span>
                                     {% elif event.event_type == "Bounce" %}
                                         <span class="badge red">Bounce</span>
                                     {% elif event.event_type == "Complaint" %}
                                         <span class="badge red">Complaint</span>
-                                    {% elif event.event_type == "Open" %}
-                                        <span class="badge orange">Open</span>
-                                    {% elif event.event_type == "Click" %}
-                                        <span class="badge orange">Click</span>
-                                    {% elif event.event_type == "Send" %}
-                                        <span class="badge blue">Send</span>
                                     {% elif event.event_type == "Reject" %}
-                                        <span class="badge red">Reject</span>
+                                        <span class="badge orange">Reject</span>
                                     {% elif event.event_type == "DeliveryDelay" %}
-                                        <span class="badge gray">Delay</span>
+                                        <span class="badge orange">Delay</span>
+                                    {% elif event.event_type == "RenderingFailure" %}
+                                        <span class="badge orange">Rendering Failure</span>
                                     {% else %}
                                         <span class="badge gray">{{ event.event_type }}</span>
                                     {% endif %}
                                 </td>
 
                                 <td>{{ event.recipient_email or "" }}</td>
-                                <td>{{ event.draft_id or "" }}</td>
-                                <td>{{ event.message_id or "" }}</td>
 
                                 <td>
-                                    {% if event.bounce_type %}
-                                        Bounce type: {{ event.bounce_type }}
-                                    {% elif event.complaint_feedback_type %}
-                                        Complaint: {{ event.complaint_feedback_type }}
-                                    {% elif event.link_url %}
-                                        {{ event.link_url }}
-                                    {% else %}
-                                        —
-                                    {% endif %}
+                                    <div class="event-detail">
+                                        {{ event.message_id or "" }}
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="event-detail">
+                                        {% if event.bounce_type %}
+                                            <strong>Bounce type:</strong> {{ event.bounce_type }}<br>
+                                        {% endif %}
+
+                                        {% if event.complaint_feedback_type %}
+                                            <strong>Complaint:</strong> {{ event.complaint_feedback_type }}<br>
+                                        {% endif %}
+
+                                        {% if event.link_url %}
+                                            <strong>Link:</strong> {{ event.link_url }}<br>
+                                        {% endif %}
+
+                                        {% if not event.bounce_type and not event.complaint_feedback_type and not event.link_url %}
+                                            —
+                                        {% endif %}
+                                    </div>
                                 </td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             {% else %}
-                <p>No SES events received yet.</p>
+                <p>No SES email events have been received yet.</p>
 
                 <div class="section-note">
-                    Events will appear here after:
-                    <br>
-                    1. SES_CONFIGURATION_SET is set correctly in Render
-                    <br>
-                    2. SES configuration set has an SNS event destination
-                    <br>
-                    3. SNS subscription is confirmed
-                    <br>
-                    4. New tracked emails are sent from the app
+                    If you recently added SES tracking, only new emails sent after the configuration set was added will create analytics events.
+                    Send a new approved draft, then refresh this page after SES sends delivery/open/click/bounce events to your webhook.
                 </div>
             {% endif %}
         </div>
-    </div>
+
+    </main>
+</div>
+
 </body>
 </html>
