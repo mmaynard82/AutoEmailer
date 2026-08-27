@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ campaign.name }} Steps | AI Emailer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f6f7f9;
+            margin: 0;
+            padding: 0;
+            color: #222;
+        }
+
+        .topbar {
+            background: #111827;
+            color: white;
+            padding: 18px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .topbar h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .topbar a {
+            color: white;
+            text-decoration: none;
+            margin-left: 14px;
+            font-size: 14px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 24px;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            height: fit-content;
+            position: sticky;
+            top: 20px;
+        }
+
+        .sidebar-title h2 {
+            margin: 4px 0 18px 0;
+            font-size: 18px;
+            line-height: 1.25;
+        }
+
+        .small-label {
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 18px;
+        }
+
+        .sidebar-nav a {
+            text-decoration: none;
+            color: #374151;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .sidebar-nav a:hover {
+            background: #f3f4f6;
+        }
+
+        .sidebar-nav a.active {
+            background: #2563eb;
+            color: white;
+        }
+
+        .sidebar-box {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 13px;
+        }
+
+        .sidebar-small {
+            font-size: 12px;
+            color: #4b5563;
+            word-break: break-word;
+        }
+
+        .main-content {
+            min-width: 0;
+        }
+
+        .message {
+            background: #ecfdf5;
+            border-left: 5px solid #047857;
+            padding: 14px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .warning {
+            background: #fff7ed;
+            border-left: 5px solid #ea580c;
+            padding: 14px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            font-size: 20px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .four-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 16px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        textarea {
+            min-height: 90px;
+        }
+
+        .large-textarea {
+            min-height: 220px;
+            font-family: Arial, sans-serif;
+        }
+
+        button, .button {
+            display: inline-block;
+            padding: 9px 13px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 13px;
+            margin: 2px;
+        }
+
+        button.green {
+            background: #059669;
+        }
+
+        button.red {
+            background: #dc2626;
+        }
+
+        button.gray {
+            background: #4b5563;
+        }
+
+        .small {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .field-helper {
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-left: 5px solid #2563eb;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 18px;
+        }
+
+        code {
+            background: #eef2ff;
+            color: #1e3a8a;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            background: #f3f4f6;
+            text-align: left;
+            padding: 9px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 12px;
+        }
+
+        td {
+            padding: 9px;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+
+        @media (max-width: 1100px) {
+            .layout {
+                grid-template-columns: 1fr;
+                padding: 18px;
+            }
+
+            .sidebar {
+                position: static;
+            }
+
+            .form-grid,
+            .four-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div>
+            <h1>Email Steps</h1>
+            <div class="small" style="color: #d1d5db;">
+                {{ campaign.name }}
+            </div>
+        </div>
+
+        <div>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/logout">Logout</a>
+        </div>
+    </div>
+
+    {% include "partials/campaign_sidebar.html" %}
+
+        {% if message %}
+            <div class="message">{{ message }}</div>
+        {% endif %}
+
+        {% if demo_mode %}
+            <div class="warning">
+                <strong>Demo mode is ON.</strong>
+                Emails will be previewed but not actually sent.
+            </div>
+        {% endif %}
+
+        <div class="card">
+            <h2>Add Email Step</h2>
+
+            <div class="field-helper">
+                <strong>Available Template Fields</strong>
+
+                <p class="small">
+                    Use these fields in the subject or body templates. The system replaces them with each contact’s information when drafts are generated.
+                </p>
+
+                <div class="form-grid">
+                    <div>
+                        <strong>Contact / Campaign Fields</strong>
+                        <div class="small" style="margin-top: 8px;">
+                            <code>{{ "{{ first_name }}" }}</code> — Contact first name<br>
+                            <code>{{ "{{ company }}" }}</code> — Company name<br>
+                            <code>{{ "{{ audience }}" }}</code> — Campaign audience<br>
+                            <code>{{ "{{ offer }}" }}</code> — Campaign offer<br>
+                            <code>{{ "{{ call_to_action }}" }}</code> — Step call to action
+                        </div>
+                    </div>
+
+                    <div>
+                        <strong>AI / System Fields</strong>
+                        <div class="small" style="margin-top: 8px;">
+                            <code>{{ "{{ intro_para }}" }}</code> — AI-generated personalized intro<br>
+                            <code>{{ "{{ unsubscribe_url }}" }}</code> — Contact unsubscribe link<br>
+                            <code>{first name}</code> — Also supported<br>
+                            <code>{company}</code> — Also supported<br>
+                            <code>{intro para}</code> — Also supported
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/steps">
+                <div class="four-grid">
+                    <div>
+                        <label>Step Number</label>
+                        <input type="number" name="step_number" value="1" min="1" required>
+                    </div>
+
+                    <div>
+                        <label>Send Day</label>
+                        <input type="number" name="send_day" value="1" min="1" required>
+                    </div>
+
+                    <div>
+                        <label>Step Name</label>
+                        <input type="text" name="name" value="Initial Outreach" required>
+                    </div>
+
+                    <div>
+                        <label>Purpose</label>
+                        <input type="text" name="purpose" value="Start a conversation" required>
+                    </div>
+                </div>
+
+                <div class="form-grid" style="margin-top: 16px;">
+                    <div>
+                        <label>Tone</label>
+                        <input type="text" name="tone" value="friendly, consultative, concise">
+                    </div>
+
+                    <div>
+                        <label>Call to Action</label>
+                        <input type="text" name="call_to_action" value="Would you be open to a brief conversation to see if this would be useful for {{ "{{ company }}" }}, or be able to point me to the right person to speak with?">
+                    </div>
+
+                    <div>
+                        <label>Subject Template</label>
+                        <input type="text" name="template_subject" value="Quick question for {{ "{{ company }}" }}">
+                    </div>
+
+                    <div>
+                        <label>Campaign Offer</label>
+                        <textarea name="offer" placeholder="Example: We are currently offering a limited number of free CRM assessments to help manufacturers identify what is working, what is not, and what could be improved quickly.">{{ campaign.offer }}</textarea>
+                        <div class="small">
+                            This fills the <code>{{ "{{ offer }}" }}</code> field in your email template.
+                        </div>
+                    </div>
+
+                    <div style="grid-column: 1 / -1;">
+                        <label>Body Template</label>
+                        <textarea class="large-textarea" name="template_body">Hi {{ "{{ first_name }}" }},
+
+{{ "{{ intro_para }}" }}
+
+For many manufacturers, the challenge is not whether they have a CRM. It is whether the system is clean, useful, and actually helping the team follow up, forecast, quote, and manage customer relationships.
+
+{{ "{{ offer }}" }}
+
+{{ "{{ call_to_action }}" }}
+
+Best,
+Evan Burns
+President & CEO
+Evolution CRM</textarea>
+                    </div>
+                </div>
+
+                <p>
+                    <button type="submit">Add Email Step</button>
+                </p>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Existing Email Steps</h2>
+
+            {% if steps %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Step</th>
+                            <th>Send Day</th>
+                            <th>Name</th>
+                            <th>Purpose</th>
+                            <th>Subject</th>
+                            <th>Edit</th>
+                            <th>Delete</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for step in steps %}
+                            <tr>
+                                <td>{{ step.step_number }}</td>
+                                <td>Day {{ step.send_day }}</td>
+                                <td>{{ step.name }}</td>
+                                <td>{{ step.purpose }}</td>
+                                <td>{{ step.template_subject }}</td>
+
+                                <td>
+                                    <details>
+                                        <summary>Edit</summary>
+
+                                        <form method="post" action="/dashboard/steps/{{ step.id }}/edit">
+                                            <label>Step Number</label>
+                                            <input type="number" name="step_number" value="{{ step.step_number }}" min="1" required>
+
+                                            <label>Send Day</label>
+                                            <input type="number" name="send_day" value="{{ step.send_day }}" min="1" required>
+
+                                            <label>Name</label>
+                                            <input type="text" name="name" value="{{ step.name }}" required>
+
+                                            <label>Purpose</label>
+                                            <input type="text" name="purpose" value="{{ step.purpose }}" required>
+
+                                            <label>Tone</label>
+                                            <input type="text" name="tone" value="{{ step.tone }}">
+
+                                            <label>Call to Action</label>
+                                            <input type="text" name="call_to_action" value="{{ step.call_to_action }}">
+
+                                            <label>Subject Template</label>
+                                            <input type="text" name="template_subject" value="{{ step.template_subject }}">
+
+                                            <label>Body Template</label>
+                                            <textarea class="large-textarea" name="template_body">{{ step.template_body }}</textarea>
+
+                                            <p>
+                                                <button type="submit">Save Step</button>
+                                            </p>
+                                        </form>
+                                    </details>
+                                </td>
+
+                                <td>
+                                    <form method="post" action="/dashboard/steps/{{ step.id }}/delete" onsubmit="return confirm('Delete this email step? This only works if no drafts exist for it.');">
+                                        <button class="red" type="submit">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>No email steps yet.</p>
+            {% endif %}
+        </div>
+
+    </main>
+</div>
+
+</body>
+</html>

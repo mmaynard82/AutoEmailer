@@ -1,0 +1,77 @@
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-title">
+            <div class="small-label">Campaign</div>
+            <h2>{{ campaign.name }}</h2>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="/dashboard">← Dashboard</a>
+
+            <a href="/dashboard/campaigns/{{ campaign.id }}"
+               class="{% if active_page == 'overview' %}active{% endif %}">
+                Overview
+            </a>
+
+            <a href="/dashboard/campaigns/{{ campaign.id }}/steps"
+               class="{% if active_page == 'steps' %}active{% endif %}">
+                Email Steps
+            </a>
+
+            <a href="/dashboard/campaigns/{{ campaign.id }}/analytics"
+               class="{% if active_page == 'analytics' %}active{% endif %}">
+                Analytics
+            </a>
+
+            <a href="#contacts"
+               class="{% if active_page == 'contacts' %}active{% endif %}">
+                Contacts
+            </a>
+
+            <a href="#drafts"
+               class="{% if active_page == 'drafts' %}active{% endif %}">
+                Drafts
+            </a>
+
+            <a href="#automation"
+               class="{% if active_page == 'automation' %}active{% endif %}">
+                Automation
+            </a>
+
+            <a href="#voice"
+               class="{% if active_page == 'voice' %}active{% endif %}">
+                Voice Profile
+            </a>
+        </nav>
+
+        <div class="sidebar-box">
+            <div class="small-label">Workspace</div>
+            <strong>
+                {% if organization %}
+                    {{ organization.name }}
+                {% else %}
+                    No workspace
+                {% endif %}
+            </strong>
+
+            <div class="small-label" style="margin-top: 12px;">Sender</div>
+            <div class="sidebar-small">
+                {% if sender_email %}
+                    {{ sender_email }}
+                {% else %}
+                    No sender configured
+                {% endif %}
+            </div>
+
+            <div class="small-label" style="margin-top: 12px;">Reply-To</div>
+            <div class="sidebar-small">
+                {% if reply_to_email %}
+                    {{ reply_to_email }}
+                {% else %}
+                    No reply-to configured
+                {% endif %}
+            </div>
+        </div>
+    </aside>
+
+    <main class="main-content">

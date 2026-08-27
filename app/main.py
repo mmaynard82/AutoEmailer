@@ -1446,6 +1446,7 @@ def campaign_detail(
             "organization": organization,
             "sender_email": sender_email,
             "reply_to_email": reply_to_email,
+            "active_page": "overview",
             "contacts": contacts,
             "steps": steps,
             "drafts": draft_rows,
@@ -1456,7 +1457,54 @@ def campaign_detail(
         },
     )
 
+@app.get("/dashboard/campaigns/{campaign_id}/steps")
+def campaign_steps_page(
+    campaign_id: int,
+    request: Request,
+    message: str = "",
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
 
+    campaign, contacts, steps, draft_rows, stats = build_campaign_context(
+        campaign_id,
+        request,
+        session,
+    )
+
+    organization = (
+        session.get(Organization, campaign.organization_id)
+        if campaign.organization_id
+        else None
+    )
+
+    sender_email = (
+        organization.sender_email
+        if organization and organization.sender_email
+        else DEFAULT_SES_FROM_EMAIL
+    )
+
+    reply_to_email = get_reply_to_email_for_sender(sender_email) if sender_email else None
+
+    return templates.TemplateResponse(
+        request=request,
+        name="campaign_steps.html",
+        context={
+            "message": message,
+            "demo_mode": DEMO_MODE,
+            "campaign": campaign,
+            "organization": organization,
+            "sender_email": sender_email,
+            "reply_to_email": reply_to_email,
+            "contacts": contacts,
+            "steps": steps,
+            "drafts": draft_rows,
+            "stats": stats,
+            "active_page": "steps",
+            "current_user": current_user_email(request),
+            "is_admin": is_admin(request),
+        },
+    )
 @app.get("/dashboard/campaigns/{campaign_id}/analytics")
 def campaign_analytics(
     campaign_id: int,
@@ -1496,6 +1544,7 @@ def campaign_analytics(
             "campaign": campaign,
             "organization": organization,
             "sender_email": sender_email,
+            "active_page": "analytics",
             "reply_to_email": reply_to_email,
             "email_performance": email_performance,
             "current_user": current_user_email(request),
@@ -1614,10 +1663,9 @@ def add_campaign_step(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/steps",
         "Email step added and campaign offer saved.",
     )
-
 @app.post("/dashboard/steps/{step_id}/edit")
 def edit_campaign_step(
     step_id: int,
