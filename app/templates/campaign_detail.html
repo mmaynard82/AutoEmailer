@@ -180,28 +180,6 @@
             font-size: 16px;
         }
 
-        .form-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-
-        label {
-            display: block;
-            font-weight: bold;
-            margin-bottom: 6px;
-            font-size: 14px;
-        }
-
-        input, textarea, select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            box-sizing: border-box;
-            font-size: 14px;
-        }
-
         button, .button {
             display: inline-block;
             padding: 9px 13px;
@@ -252,11 +230,6 @@
             line-height: 1.5;
         }
 
-        .danger-zone {
-            background: #fff1f2;
-            border: 1px solid #fecdd3;
-        }
-
         .status-on {
             color: #047857;
             font-weight: bold;
@@ -278,8 +251,7 @@
             }
 
             .stats-grid,
-            .quick-actions,
-            .form-grid {
+            .quick-actions {
                 grid-template-columns: 1fr;
             }
         }
@@ -478,32 +450,16 @@
             </a>
         </div>
 
-        <div class="card danger-zone">
-            <h2>Settings / Danger Zone</h2>
+        <div class="card">
+            <h2>Settings</h2>
 
-            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/edit">
-                <div class="form-grid">
-                    <div>
-                        <label>Campaign Name</label>
-                        <input type="text" name="name" value="{{ campaign.name }}" required>
-                    </div>
+            <p class="section-note">
+                Edit campaign name, audience, review sender details, and access the campaign danger zone.
+            </p>
 
-                    <div>
-                        <label>Audience</label>
-                        <input type="text" name="audience" value="{{ campaign.audience }}">
-                    </div>
-                </div>
-
-                <p>
-                    <button type="submit">Save Campaign</button>
-                </p>
-            </form>
-
-            <hr style="border: none; border-top: 1px solid #fecdd3; margin: 22px 0;">
-
-            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/delete" onsubmit="return confirm('Delete this entire campaign and all related contacts, steps, drafts, and saved style examples?');">
-                <button class="red" type="submit">Delete This Campaign</button>
-            </form>
+            <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/settings">
+                Manage Settings
+            </a>
         </div>
 
     </main>

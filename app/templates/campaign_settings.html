@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ campaign.name }} Settings | AI Emailer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f6f7f9;
+            margin: 0;
+            padding: 0;
+            color: #222;
+        }
+
+        .topbar {
+            background: #111827;
+            color: white;
+            padding: 18px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .topbar h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .topbar a {
+            color: white;
+            text-decoration: none;
+            margin-left: 14px;
+            font-size: 14px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 24px;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            height: fit-content;
+            position: sticky;
+            top: 20px;
+        }
+
+        .sidebar-title h2 {
+            margin: 4px 0 18px 0;
+            font-size: 18px;
+            line-height: 1.25;
+        }
+
+        .small-label {
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 18px;
+        }
+
+        .sidebar-nav a {
+            text-decoration: none;
+            color: #374151;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .sidebar-nav a:hover {
+            background: #f3f4f6;
+        }
+
+        .sidebar-nav a.active {
+            background: #2563eb;
+            color: white;
+        }
+
+        .sidebar-box {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 13px;
+        }
+
+        .sidebar-small {
+            font-size: 12px;
+            color: #4b5563;
+            word-break: break-word;
+        }
+
+        .main-content {
+            min-width: 0;
+        }
+
+        .message {
+            background: #ecfdf5;
+            border-left: 5px solid #047857;
+            padding: 14px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .warning {
+            background: #fff7ed;
+            border-left: 5px solid #ea580c;
+            padding: 14px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            font-size: 20px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        textarea {
+            min-height: 100px;
+        }
+
+        button, .button {
+            display: inline-block;
+            padding: 9px 13px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 13px;
+            margin: 2px;
+        }
+
+        button.green, .button.green {
+            background: #059669;
+        }
+
+        button.red, .button.red {
+            background: #dc2626;
+        }
+
+        button.gray, .button.gray {
+            background: #4b5563;
+        }
+
+        .small {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .section-note {
+            background: #f9fafb;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            color: #4b5563;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .danger-zone {
+            background: #fff1f2;
+            border: 1px solid #fecdd3;
+        }
+
+        .danger-zone h2 {
+            color: #991b1b;
+        }
+
+        @media (max-width: 1100px) {
+            .layout {
+                grid-template-columns: 1fr;
+                padding: 18px;
+            }
+
+            .sidebar {
+                position: static;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div>
+            <h1>Settings</h1>
+            <div class="small" style="color: #d1d5db;">
+                {{ campaign.name }}
+                {% if current_user %}
+                    | Logged in as: {{ current_user }}
+                {% endif %}
+                {% if is_admin %}
+                    | Admin
+                {% endif %}
+            </div>
+        </div>
+
+        <div>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/logout">Logout</a>
+        </div>
+    </div>
+
+    {% include "partials/campaign_sidebar.html" %}
+
+        {% if message %}
+            <div class="message">{{ message }}</div>
+        {% endif %}
+
+        {% if demo_mode %}
+            <div class="warning">
+                <strong>Demo mode is ON.</strong>
+                Emails will be previewed but not actually sent.
+            </div>
+        {% endif %}
+
+        <div class="card">
+            <h2>Campaign Settings</h2>
+
+            <p class="section-note">
+                These settings control the basic campaign name and audience label used throughout the workspace.
+            </p>
+
+            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/edit">
+                <div class="form-grid">
+                    <div>
+                        <label>Campaign Name</label>
+                        <input type="text" name="name" value="{{ campaign.name }}" required>
+                    </div>
+
+                    <div>
+                        <label>Audience</label>
+                        <input type="text" name="audience" value="{{ campaign.audience }}" placeholder="Example: small businesses, manufacturers, nonprofits">
+                        <div class="small">
+                            This fills the <code>{{ "{{ audience }}" }}</code> field when used in templates.
+                        </div>
+                    </div>
+                </div>
+
+                <p>
+                    <button class="green" type="submit">Save Campaign Settings</button>
+                </p>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Current Campaign Details</h2>
+
+            <div class="section-note">
+                <strong>Campaign:</strong> {{ campaign.name }}
+                <br><br>
+
+                <strong>Audience:</strong> {{ campaign.audience }}
+                <br><br>
+
+                <strong>Offer:</strong>
+                {% if campaign.offer %}
+                    {{ campaign.offer }}
+                {% else %}
+                    No offer saved yet.
+                {% endif %}
+                <br><br>
+
+                <strong>Created:</strong> {{ campaign.created_at }}
+                <br><br>
+
+                <strong>Workspace:</strong>
+                {% if organization %}
+                    {{ organization.name }}
+                {% else %}
+                    No workspace assigned.
+                {% endif %}
+                <br><br>
+
+                <strong>Sender:</strong>
+                {% if sender_email %}
+                    {{ sender_email }}
+                {% else %}
+                    No sender configured.
+                {% endif %}
+            </div>
+
+            <p class="small">
+                The campaign offer is edited from the Email Steps page because it directly fills the <code>{{ "{{ offer }}" }}</code> template field.
+            </p>
+
+            <p>
+                <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/steps">Manage Email Steps</a>
+            </p>
+        </div>
+
+        <div class="card danger-zone">
+            <h2>Danger Zone</h2>
+
+            <p class="section-note">
+                Deleting this campaign permanently removes the campaign and its related contacts, email steps, drafts, saved style examples, and email events.
+            </p>
+
+            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/delete" onsubmit="return confirm('Delete this entire campaign and all related contacts, steps, drafts, saved style examples, and email events? This cannot be undone.');">
+                <button class="red" type="submit">Delete This Campaign</button>
+            </form>
+        </div>
+
+    </main>
+</div>
+
+</body>
+</html>
