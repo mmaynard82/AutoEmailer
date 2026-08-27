@@ -25,6 +25,7 @@ from app.models import (
     CadenceStep,
     EmailDraft,
     EmailEvent,
+    AutomationLog,
     StyleExample,
     Suppression,
 )
@@ -230,6 +231,33 @@ def get_reply_to_email_for_sender(sender_email: str) -> str:
 
     return sender_email
 
+def create_automation_log(
+    session: Session,
+    campaign: Campaign | None,
+    event_type: str,
+    message: str,
+    drafts_due: int = 0,
+    sent_count: int = 0,
+    skipped_count: int = 0,
+    error_count: int = 0,
+    details: str | None = None,
+):
+    log = AutomationLog(
+        organization_id=campaign.organization_id if campaign else None,
+        campaign_id=campaign.id if campaign else None,
+        event_type=event_type,
+        message=message,
+        drafts_due=drafts_due,
+        sent_count=sent_count,
+        skipped_count=skipped_count,
+        error_count=error_count,
+        details=details,
+    )
+
+    session.add(log)
+    session.commit()
+
+    return log
 
 def get_style_examples_for_organization(
     organization_id: Optional[int],
@@ -3016,6 +3044,13 @@ def campaign_automation_page(
 
     reply_to_email = get_reply_to_email_for_sender(sender_email) if sender_email else None
 
+    automation_logs = session.exec(
+        select(AutomationLog)
+        .where(AutomationLog.campaign_id == campaign.id)
+        .order_by(AutomationLog.created_at.desc())
+        .limit(25)
+    ).all()
+
     return templates.TemplateResponse(
         request=request,
         name="campaign_automation.html",
@@ -3030,6 +3065,7 @@ def campaign_automation_page(
             "steps": steps,
             "drafts": draft_rows,
             "stats": stats,
+            "automation_logs": automation_logs,
             "active_page": "automation",
             "current_user": current_user_email(request),
             "is_admin": is_admin(request),
@@ -3142,6 +3178,8 @@ def cron_send_due_emails(
 
         campaign_sent = 0
         campaign_skipped = 0
+        campaign_errors = []
+        campaign_due_count = 0
 
         for draft in drafts:
             if campaign_sent >= daily_limit:
@@ -3174,6 +3212,8 @@ def cron_send_due_emails(
             if not draft_is_due_today(contact, draft, campaign):
                 continue
 
+            campaign_due_count += 1
+
             try:
                 safe_send_email(
                     to_email=contact.email,
@@ -3195,13 +3235,35 @@ def cron_send_due_emails(
                 campaign_sent += 1
                 total_sent += 1
 
+
             except Exception as e:
+
                 technical_error = f"Campaign {campaign.id}, draft {draft.id}, {contact.email}: {repr(e)}"
+
                 print(f"CRON SES SEND ERROR: {technical_error}")
+
                 errors.append(technical_error)
+
+                campaign_errors.append(technical_error)
+
+                campaign_skipped += 1
+
+                total_skipped += 1
 
         campaign.last_automation_run_at = datetime.utcnow()
         session.add(campaign)
+
+        create_automation_log(
+            session=session,
+            campaign=campaign,
+            event_type="cron_run",
+            message="Automation cron checked this campaign.",
+            drafts_due=campaign_due_count,
+            sent_count=campaign_sent,
+            skipped_count=campaign_skipped,
+            error_count=len(campaign_errors),
+            details="\n".join(campaign_errors) if campaign_errors else None,
+        )
 
         campaign_results.append({
             "campaign_id": campaign.id,
