@@ -1,14 +1,584 @@
-<div class="card">
-    <h2>Drafts</h2>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ campaign.name }} Drafts | AI Emailer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f6f7f9;
+            margin: 0;
+            padding: 0;
+            color: #222;
+        }
 
-    <p class="section-note">
-        Drafts: {{ stats.drafts }} |
-        Approved: {{ stats.approved }} |
-        Needs Review: {{ stats.unapproved }} |
-        Sent: {{ stats.sent }}
-    </p>
+        .topbar {
+            background: #111827;
+            color: white;
+            padding: 18px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
 
-    <a class="button" href="/dashboard/campaigns/{{ campaign.id }}/drafts">
-        Manage Drafts
-    </a>
+        .topbar h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .topbar a {
+            color: white;
+            text-decoration: none;
+            margin-left: 14px;
+            font-size: 14px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 24px;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            height: fit-content;
+            position: sticky;
+            top: 20px;
+        }
+
+        .sidebar-title h2 {
+            margin: 4px 0 18px 0;
+            font-size: 18px;
+            line-height: 1.25;
+        }
+
+        .small-label {
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 18px;
+        }
+
+        .sidebar-nav a {
+            text-decoration: none;
+            color: #374151;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .sidebar-nav a:hover {
+            background: #f3f4f6;
+        }
+
+        .sidebar-nav a.active {
+            background: #2563eb;
+            color: white;
+        }
+
+        .sidebar-box {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 13px;
+        }
+
+        .sidebar-small {
+            font-size: 12px;
+            color: #4b5563;
+            word-break: break-word;
+        }
+
+        .main-content {
+            min-width: 0;
+        }
+
+        .message {
+            background: #ecfdf5;
+            border-left: 5px solid #047857;
+            padding: 14px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .warning {
+            background: #fff7ed;
+            border-left: 5px solid #ea580c;
+            padding: 14px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            font-size: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(140px, 1fr));
+            gap: 12px;
+        }
+
+        .stat {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            padding: 14px;
+            border-radius: 10px;
+        }
+
+        .stat .number {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .stat .label {
+            color: #6b7280;
+            font-size: 12px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .three-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        button, .button {
+            display: inline-block;
+            padding: 9px 13px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 13px;
+            margin: 2px;
+        }
+
+        button.green, .button.green {
+            background: #059669;
+        }
+
+        button.red, .button.red {
+            background: #dc2626;
+        }
+
+        button.gray, .button.gray {
+            background: #4b5563;
+        }
+
+        button.orange, .button.orange {
+            background: #ea580c;
+        }
+
+        button.purple, .button.purple {
+            background: #7c3aed;
+        }
+
+        .small {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .section-note {
+            background: #f9fafb;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            color: #4b5563;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            background: #f3f4f6;
+            text-align: left;
+            padding: 9px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 12px;
+        }
+
+        td {
+            padding: 9px;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .badge.green {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge.gray {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .badge.orange {
+            background: #ffedd5;
+            color: #9a3412;
+        }
+
+        .badge.red {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .actions {
+            white-space: nowrap;
+        }
+
+        .actions form {
+            display: inline;
+        }
+
+        .email-body {
+            white-space: pre-wrap;
+            max-width: 520px;
+            font-size: 12px;
+            line-height: 1.4;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            padding: 10px;
+            border-radius: 6px;
+            max-height: 240px;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 1100px) {
+            .layout {
+                grid-template-columns: 1fr;
+                padding: 18px;
+            }
+
+            .sidebar {
+                position: static;
+            }
+
+            .stats-grid,
+            .form-grid,
+            .three-grid {
+                grid-template-columns: 1fr;
+            }
+
+            table {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div>
+            <h1>Drafts</h1>
+            <div class="small" style="color: #d1d5db;">
+                {{ campaign.name }}
+                {% if current_user %}
+                    | Logged in as: {{ current_user }}
+                {% endif %}
+                {% if is_admin %}
+                    | Admin
+                {% endif %}
+            </div>
+        </div>
+
+        <div>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/logout">Logout</a>
+        </div>
+    </div>
+
+    {% include "partials/campaign_sidebar.html" %}
+
+        {% if message %}
+            <div class="message">{{ message }}</div>
+        {% endif %}
+
+        {% if demo_mode %}
+            <div class="warning">
+                <strong>Demo mode is ON.</strong>
+                Emails will be previewed but not actually sent.
+            </div>
+        {% endif %}
+
+        <div class="card">
+            <h2>Draft Summary</h2>
+
+            <div class="stats-grid">
+                <div class="stat">
+                    <div class="number">{{ stats.drafts }}</div>
+                    <div class="label">Total Drafts</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ stats.approved }}</div>
+                    <div class="label">Approved</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ stats.unapproved }}</div>
+                    <div class="label">Needs Review</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ stats.sent }}</div>
+                    <div class="label">Sent</div>
+                </div>
+            </div>
+
+            <p class="section-note" style="margin-top: 16px;">
+                Drafts are generated from your Email Steps. Existing drafts are skipped. If you edit an email step, delete unsent drafts for that step and regenerate.
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>Generate Drafts</h2>
+
+            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/drafts/generate">
+                <div class="three-grid">
+                    <div>
+                        <label>Email Step</label>
+                        <select name="cadence_step_id">
+                            <option value="all">All email steps</option>
+                            {% for step in steps %}
+                                <option value="{{ step.id }}">
+                                    Step {{ step.step_number }} - Day {{ step.send_day }} - {{ step.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <p>
+                    <button type="submit">Generate Drafts</button>
+                </p>
+            </form>
+
+            <p class="small">
+                Existing drafts are skipped. Delete unsent drafts below before regenerating if the template changed.
+            </p>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 22px 0;">
+
+            <h3>Delete Drafts for an Email Step</h3>
+
+            <p class="small">
+                This deletes only unsent drafts for the selected email step. Sent drafts are protected.
+            </p>
+
+            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/drafts/delete-step" onsubmit="return confirm('Delete all unsent drafts for this email step? You can regenerate them afterward.');">
+                <div class="three-grid">
+                    <div>
+                        <label>Email Step</label>
+                        <select name="cadence_step_id" required>
+                            {% for step in steps %}
+                                <option value="{{ step.id }}">
+                                    Step {{ step.step_number }} - Day {{ step.send_day }} - {{ step.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <p>
+                    <button class="red" type="submit">Delete Unsent Drafts for This Step</button>
+                </p>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Approval + Sending</h2>
+
+            <div class="three-grid">
+                <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/drafts/approve-all">
+                    <label>Approve All Unsent Drafts</label>
+                    <button class="green" type="submit">Approve All</button>
+                </form>
+
+                <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/drafts/approve-day">
+                    <label>Approve by Day</label>
+                    <input type="number" name="send_day" value="1" min="1">
+
+                    <p>
+                        <button class="green" type="submit">Approve Day</button>
+                    </p>
+                </form>
+
+                <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/drafts/send-day">
+                    <label>Send Day</label>
+                    <input type="number" name="send_day" value="1" min="1">
+
+                    <label>Max Send</label>
+                    <input type="number" name="max_send" value="5" min="1" max="100">
+
+                    <label>
+                        <input type="checkbox" name="dry_run" value="true" style="width: auto;">
+                        Dry run only
+                    </label>
+
+                    <p>
+                        <button type="submit">Send Day</button>
+                    </p>
+                </form>
+            </div>
+
+            <p class="section-note">
+                Manual sending only sends approved, unsent drafts for the selected day.
+                Automated sending uses the campaign automation settings from the Overview page.
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>Drafts</h2>
+
+            {% if drafts %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Step</th>
+                            <th>Day</th>
+                            <th>Contact</th>
+                            <th>Email</th>
+                            <th>Company</th>
+                            <th>Subject</th>
+                            <th>Body</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for draft in drafts %}
+                            <tr>
+                                <td>{{ draft.step_number }}</td>
+                                <td>Day {{ draft.send_day }}</td>
+                                <td>{{ draft.contact_name }}</td>
+                                <td>{{ draft.to }}</td>
+                                <td>{{ draft.company }}</td>
+                                <td>{{ draft.subject }}</td>
+
+                                <td>
+                                    <div class="email-body">{{ draft.body }}</div>
+                                </td>
+
+                                <td>
+                                    {% if draft.sent %}
+                                        <span class="badge green">Sent</span>
+                                        <div class="small">{{ draft.sent_at }}</div>
+                                    {% elif draft.approved %}
+                                        <span class="badge orange">Approved</span>
+                                    {% else %}
+                                        <span class="badge gray">Needs Review</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="actions">
+                                    {% if not draft.sent %}
+                                        <a class="button gray" href="/dashboard/drafts/{{ draft.id }}/edit">Edit</a>
+
+                                        <form method="post" action="/dashboard/drafts/{{ draft.id }}/save-style-example">
+                                            <input type="hidden" name="label" value="Edited draft example">
+                                            <button class="orange" type="submit">Save as Style Example</button>
+                                        </form>
+
+                                        <form method="post" action="/dashboard/drafts/{{ draft.id }}/delete" onsubmit="return confirm('Delete this draft? You can regenerate it afterward if needed.');">
+                                            <button class="red" type="submit">Delete</button>
+                                        </form>
+
+                                        {% if not draft.approved %}
+                                            <form method="post" action="/dashboard/drafts/{{ draft.id }}/approve">
+                                                <button class="green" type="submit">Approve</button>
+                                            </form>
+                                        {% endif %}
+
+                                        {% if draft.approved %}
+                                            <form method="post" action="/dashboard/drafts/{{ draft.id }}/send" onsubmit="return confirm('Send this email now?');">
+                                                <button type="submit">Send</button>
+                                            </form>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="small">Sent draft protected</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>No drafts yet.</p>
+
+                <div class="section-note">
+                    Add email steps first, upload contacts, then generate drafts.
+                </div>
+            {% endif %}
+        </div>
+
+    </main>
 </div>
+
+</body>
+</html>
