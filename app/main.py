@@ -1585,12 +1585,17 @@ def add_campaign_step(
     tone: str = Form("friendly, consultative, concise"),
     call_to_action: str = Form("Would you be open to a quick conversation?"),
     template_subject: str = Form("Quick question for {{ company }}"),
+    offer: str = Form(""),
     template_body: str = Form(...),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
 
     campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+
+    if offer.strip():
+        campaign.offer = offer.strip()
+        session.add(campaign)
 
     step = CadenceStep(
         organization_id=campaign.organization_id,
@@ -1610,9 +1615,8 @@ def add_campaign_step(
 
     return redirect_with_message(
         f"/dashboard/campaigns/{campaign_id}",
-        "Email step added.",
+        "Email step added and campaign offer saved.",
     )
-
 
 @app.post("/dashboard/steps/{step_id}/edit")
 def edit_campaign_step(

@@ -490,7 +490,7 @@
                 </div>
 
                 <p class="small">
-                    The campaign offer is set when the campaign is created and is still used by the AI when generating drafts.
+                    The campaign offer can be updated when you add a new email step below.
                 </p>
 
                 <p>
@@ -525,12 +525,12 @@
 
                     <div>
                         <label>Signature Name</label>
-                        <input type="text" name="signature_name" value="{% if organization and organization.signature_name %}{{ organization.signature_name }}{% endif %}" placeholder="Michaela Maynard">
+                        <input type="text" name="signature_name" value="{% if organization and organization.signature_name %}{{ organization.signature_name }}{% endif %}" placeholder="Evan Burns">
                     </div>
 
                     <div>
                         <label>Signature Title</label>
-                        <input type="text" name="signature_title" value="{% if organization and organization.signature_title %}{{ organization.signature_title }}{% endif %}" placeholder="CRM Consultant">
+                        <input type="text" name="signature_title" value="{% if organization and organization.signature_title %}{{ organization.signature_title }}{% endif %}" placeholder="President & CEO">
                     </div>
 
                     <div>
@@ -616,7 +616,7 @@
 
                     <div>
                         <label>Call to Action</label>
-                        <input type="text" name="call_to_action" value="Would you be open to a quick conversation?">
+                        <input type="text" name="call_to_action" value="Would you be open to a brief conversation to see if this would be useful for {{ company }}, or be able to point me to the right person to speak with?">
                     </div>
 
                     <div>
@@ -625,18 +625,28 @@
                     </div>
 
                     <div>
+                        <label>Campaign Offer</label>
+                        <textarea name="offer" placeholder="Example: We are currently offering a limited number of free CRM assessments to help manufacturers identify what is working, what is not, and what could be improved quickly.">{{ campaign.offer }}</textarea>
+                        <div class="small">
+                            This fills the <code>{{ "{{ offer }}" }}</code> field in your email template.
+                        </div>
+                    </div>
+
+                    <div>
                         <label>Body Template</label>
                         <textarea class="large-textarea" name="template_body">Hi {{ "{{ first_name }}" }},
 
 {{ "{{ intro_para }}" }}
 
-I’m reaching out because we help {{ "{{ audience }}" }} improve CRM follow-up, sales visibility, and client communication.
+For many manufacturers, the challenge is not whether they have a CRM. It is whether the system is clean, useful, and actually helping the team follow up, forecast, quote, and manage customer relationships.
 
 {{ "{{ offer }}" }}
 
 {{ "{{ call_to_action }}" }}
 
 Best,
+Evan Burns
+President & CEO
 Evolution CRM</textarea>
                     </div>
                 </div>
