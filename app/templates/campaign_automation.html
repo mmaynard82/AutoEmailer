@@ -142,6 +142,117 @@
         </div>
 
         <div class="card">
+            <h2>Due Drafts Preview</h2>
+
+            <p class="section-note">
+                Due now: {{ due_drafts_preview.due_count }} |
+                Blocked or not due: {{ due_drafts_preview.blocked_count }} |
+                Previewed: {{ due_drafts_preview.total_previewed }}
+            </p>
+
+            <p class="small">
+                This preview shows approved, unsent drafts and whether automation would send them now.
+                The cron job will still respect the daily send limit.
+            </p>
+
+            {% if due_drafts_preview.rows %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Reason</th>
+                            <th>Step</th>
+                            <th>Day</th>
+                            <th>Contact</th>
+                            <th>Email</th>
+                            <th>Company</th>
+                            <th>Subject</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for row in due_drafts_preview.rows %}
+                            <tr>
+                                <td>
+                                    {% if row.can_send %}
+                                        <span class="badge green">Due now</span>
+                                    {% else %}
+                                        <span class="badge gray">Not sendable</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ row.reason }}</td>
+                                <td>{{ row.step_number }}</td>
+                                <td>{{ row.send_day }}</td>
+                                <td>{{ row.contact_name }}</td>
+                                <td>{{ row.email }}</td>
+                                <td>{{ row.company }}</td>
+                                <td>{{ row.subject }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>No approved, unsent drafts to preview.</p>
+
+                <div class="section-note">
+                    Generate and approve drafts before automation can send anything.
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Automation Log</h2>
+
+            <p class="small">
+                This shows the most recent cron checks and automated sending activity for this campaign.
+            </p>
+
+            {% if automation_logs %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Event</th>
+                            <th>Message</th>
+                            <th>Due</th>
+                            <th>Sent</th>
+                            <th>Skipped</th>
+                            <th>Errors</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for log in automation_logs %}
+                            <tr>
+                                <td>{{ log.created_at }}</td>
+                                <td>{{ log.event_type }}</td>
+                                <td>{{ log.message }}</td>
+                                <td>{{ log.drafts_due }}</td>
+                                <td>{{ log.sent_count }}</td>
+                                <td>{{ log.skipped_count }}</td>
+                                <td>{{ log.error_count }}</td>
+                                <td>
+                                    {% if log.details %}
+                                        <div class="email-body">{{ log.details }}</div>
+                                    {% else %}
+                                        <span class="small">No details</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>No automation log entries yet.</p>
+
+                <div class="section-note">
+                    The log will appear after the cron job runs or after automation activity is recorded.
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="card">
             <h2>Before Turning Automation On</h2>
 
             <div class="section-note">

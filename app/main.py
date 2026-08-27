@@ -2853,6 +2853,109 @@ def draft_is_due_today(contact: Contact, draft: EmailDraft, campaign: Campaign) 
 
     return due_date <= today
 
+def build_due_drafts_preview(
+    campaign: Campaign,
+    session: Session,
+    limit: int = 50,
+):
+    drafts = session.exec(
+        select(EmailDraft).where(
+            EmailDraft.campaign_id == campaign.id,
+            EmailDraft.approved == True,
+            EmailDraft.sent == False,
+        )
+    ).all()
+
+    drafts = sorted(
+        drafts,
+        key=lambda d: (
+            d.send_day or 999,
+            d.created_at,
+            d.id or 0,
+        ),
+    )
+
+    preview_rows = []
+
+    for draft in drafts:
+        if len(preview_rows) >= limit:
+            break
+
+        contact = session.get(Contact, draft.contact_id)
+
+        if not contact:
+            preview_rows.append({
+                "draft_id": draft.id,
+                "contact_name": "Missing contact",
+                "email": "",
+                "company": "",
+                "step_number": draft.step_number,
+                "send_day": draft.send_day,
+                "subject": draft.subject,
+                "status": "Skipped",
+                "reason": "Contact not found",
+                "is_due": False,
+                "can_send": False,
+            })
+            continue
+
+        suppression = session.exec(
+            select(Suppression).where(
+                Suppression.email == contact.email,
+                Suppression.organization_id == contact.organization_id,
+            )
+        ).first()
+
+        is_due = draft_is_due_today(contact, draft, campaign)
+
+        blocked_reason = ""
+
+        if contact.unsubscribed:
+            blocked_reason = "Contact unsubscribed"
+        elif contact.suppressed:
+            blocked_reason = "Contact suppressed"
+        elif suppression:
+            blocked_reason = "Suppression list"
+        elif not is_due:
+            blocked_reason = "Not due yet"
+
+        can_send = is_due and not blocked_reason
+
+        if can_send:
+            status = "Due now"
+            reason = "Ready for automation"
+        else:
+            status = "Not sendable"
+            reason = blocked_reason
+
+        contact_name = contact.first_name or ""
+
+        if contact.last_name:
+            contact_name = f"{contact_name} {contact.last_name}".strip()
+
+        preview_rows.append({
+            "draft_id": draft.id,
+            "contact_name": contact_name,
+            "email": contact.email,
+            "company": contact.company or "",
+            "step_number": draft.step_number,
+            "send_day": draft.send_day,
+            "subject": draft.subject,
+            "status": status,
+            "reason": reason,
+            "is_due": is_due,
+            "can_send": can_send,
+        })
+
+    due_count = sum(1 for row in preview_rows if row["can_send"])
+    blocked_count = sum(1 for row in preview_rows if not row["can_send"])
+
+    return {
+        "rows": preview_rows,
+        "due_count": due_count,
+        "blocked_count": blocked_count,
+        "total_previewed": len(preview_rows),
+    }
 
 @app.post("/dashboard/campaigns/{campaign_id}/automation")
 def update_campaign_automation(
@@ -3051,6 +3154,12 @@ def campaign_automation_page(
         .limit(25)
     ).all()
 
+    due_drafts_preview = build_due_drafts_preview(
+        campaign=campaign,
+        session=session,
+        limit=50,
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="campaign_automation.html",
@@ -3066,6 +3175,7 @@ def campaign_automation_page(
             "drafts": draft_rows,
             "stats": stats,
             "automation_logs": automation_logs,
+            "due_drafts_preview": due_drafts_preview,
             "active_page": "automation",
             "current_user": current_user_email(request),
             "is_admin": is_admin(request),
