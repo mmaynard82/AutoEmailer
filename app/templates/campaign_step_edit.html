@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Email Step | {{ campaign.name }} | AI Emailer</title>
+    <link rel="stylesheet" href="/static/campaign_workspace.css">
+</head>
+
+<body>
+    <div class="topbar">
+        <div>
+            <h1>Edit Email Step</h1>
+            <div class="small" style="color: #d1d5db;">
+                {{ campaign.name }}
+                {% if current_user %}
+                    | Logged in as: {{ current_user }}
+                {% endif %}
+                {% if is_admin %}
+                    | Admin
+                {% endif %}
+            </div>
+        </div>
+
+        <div>
+            <a href="/dashboard/campaigns/{{ campaign.id }}/steps">Back to Email Steps</a>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/logout">Logout</a>
+        </div>
+    </div>
+
+    {% include "partials/campaign_sidebar.html" %}
+
+        {% if message %}
+            <div class="message">{{ message }}</div>
+        {% endif %}
+
+        {% if demo_mode %}
+            <div class="warning">
+                <strong>Demo mode is ON.</strong>
+                Emails will be previewed but not actually sent.
+            </div>
+        {% endif %}
+
+        <div class="card">
+            <h2>Edit Step {{ step.step_number }} - {{ step.name }}</h2>
+
+            <p class="section-note">
+                Changes to an email step will affect future generated drafts only.
+                Existing drafts will not automatically update. To apply changes, go to Drafts, delete unsent drafts for this step, then regenerate them.
+            </p>
+
+            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/steps/{{ step.id }}/edit">
+                <div class="form-grid">
+                    <div>
+                        <label>Step Number</label>
+                        <input type="number" name="step_number" value="{{ step.step_number }}" min="1" required>
+                    </div>
+
+                    <div>
+                        <label>Send Day</label>
+                        <input type="number" name="send_day" value="{{ step.send_day }}" min="1" required>
+                        <div class="small">
+                            Day 1 is the first campaign send day.
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Step Name</label>
+                        <input type="text" name="name" value="{{ step.name }}" required>
+                    </div>
+
+                    <div>
+                        <label>Purpose</label>
+                        <input type="text" name="purpose" value="{{ step.purpose }}" required>
+                    </div>
+
+                    <div>
+                        <label>Tone</label>
+                        <input type="text" name="tone" value="{{ step.tone }}">
+                    </div>
+
+                    <div>
+                        <label>Call to Action</label>
+                        <input type="text" name="call_to_action" value="{{ step.call_to_action }}">
+                    </div>
+
+                    <div>
+                        <label>Subject Template</label>
+                        <input type="text" name="template_subject" value="{{ step.template_subject }}">
+                    </div>
+
+                    <div>
+                        <label>Campaign Offer</label>
+                        <textarea name="offer" placeholder="Example: We are currently offering a limited number of free CRM assessments.">{{ campaign.offer }}</textarea>
+                        <div class="small">
+                            This fills the <code>{{ "{{ offer }}" }}</code> field in your email template.
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 16px;">
+                    <label>Body Template</label>
+                    <textarea name="template_body" style="min-height: 320px;">{{ step.template_body }}</textarea>
+
+                    <div class="small">
+                        Supported fields:
+                        <code>{{ "{{ first_name }}" }}</code>,
+                        <code>{{ "{{ last_name }}" }}</code>,
+                        <code>{{ "{{ company }}" }}</code>,
+                        <code>{{ "{{ audience }}" }}</code>,
+                        <code>{{ "{{ offer }}" }}</code>,
+                        <code>{{ "{{ call_to_action }}" }}</code>,
+                        <code>{{ "{{ intro_para }}" }}</code>,
+                        <code>{{ "{{ signature_name }}" }}</code>,
+                        <code>{{ "{{ signature_title }}" }}</code>,
+                        <code>{{ "{{ signature_company }}" }}</code>.
+                    </div>
+                </div>
+
+                <p>
+                    <button class="green" type="submit">Save Email Step</button>
+                    <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/steps">Cancel</a>
+                    <a class="button" href="/dashboard/campaigns/{{ campaign.id }}/drafts?step_filter={{ step.id }}">View Drafts for This Step</a>
+                </p>
+            </form>
+        </div>
+
+        <div class="card danger-zone">
+            <h2>Regenerate Drafts After Editing</h2>
+
+            <p class="section-note">
+                If you already generated drafts for this step, the old drafts will keep the old subject and body.
+                To update them:
+                <br><br>
+                1. Go to Drafts.
+                <br>
+                2. Delete unsent drafts for this email step.
+                <br>
+                3. Generate drafts again for this step.
+            </p>
+
+            <p>
+                <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/drafts?step_filter={{ step.id }}">
+                    Go to Drafts for This Step
+                </a>
+            </p>
+        </div>
+
+    </main>
+</div>
+
+</body>
+</html>

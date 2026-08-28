@@ -2710,7 +2710,97 @@ def approve_single_draft(
         "Draft approved.",
     )
 
+@app.get("/dashboard/campaigns/{campaign_id}/steps/{step_id}/edit")
+def edit_campaign_step_page(
+    campaign_id: int,
+    step_id: int,
+    request: Request,
+    message: str = "",
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
 
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+
+    step = session.get(CadenceStep, step_id)
+
+    if not step or step.campaign_id != campaign.id:
+        raise HTTPException(status_code=404, detail="Email step not found.")
+
+    organization = (
+        session.get(Organization, campaign.organization_id)
+        if campaign.organization_id
+        else None
+    )
+
+    sender_email = (
+        organization.sender_email
+        if organization and organization.sender_email
+        else DEFAULT_SES_FROM_EMAIL
+    )
+
+    reply_to_email = get_reply_to_email_for_sender(sender_email) if sender_email else None
+
+    return templates.TemplateResponse(
+        request=request,
+        name="campaign_step_edit.html",
+        context={
+            "message": message,
+            "demo_mode": DEMO_MODE,
+            "campaign": campaign,
+            "step": step,
+            "organization": organization,
+            "sender_email": sender_email,
+            "reply_to_email": reply_to_email,
+            "active_page": "steps",
+            "current_user": current_user_email(request),
+            "is_admin": is_admin(request),
+        },
+    )
+@app.post("/dashboard/campaigns/{campaign_id}/steps/{step_id}/edit")
+def save_campaign_step_edit(
+    campaign_id: int,
+    step_id: int,
+    request: Request,
+    step_number: int = Form(...),
+    send_day: int = Form(...),
+    name: str = Form(...),
+    purpose: str = Form(...),
+    tone: str = Form("friendly, consultative, concise"),
+    call_to_action: str = Form("Would you be open to a quick conversation?"),
+    template_subject: str = Form("Quick question for {{ company }}"),
+    offer: str = Form(""),
+    template_body: str = Form(...),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+
+    step = session.get(CadenceStep, step_id)
+
+    if not step or step.campaign_id != campaign.id:
+        raise HTTPException(status_code=404, detail="Email step not found.")
+
+    step.step_number = step_number
+    step.send_day = send_day
+    step.name = name
+    step.purpose = purpose
+    step.tone = tone
+    step.call_to_action = call_to_action
+    step.template_subject = template_subject
+    step.template_body = template_body
+
+    campaign.offer = offer.strip()
+
+    session.add(step)
+    session.add(campaign)
+    session.commit()
+
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign.id}/steps",
+        "Email step updated. Existing drafts were not changed. Delete and regenerate unsent drafts for this step if needed."
+    )
 @app.get("/dashboard/drafts/{draft_id}/edit")
 def dashboard_edit_draft_page(
     draft_id: int,
