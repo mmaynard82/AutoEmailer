@@ -1658,6 +1658,7 @@ def campaign_drafts_page(
     campaign_id: int,
     request: Request,
     message: str = "",
+    step_filter: str = Query(""),
     session: Session = Depends(get_session),
 ):
     require_dashboard_login(request)
@@ -1667,6 +1668,12 @@ def campaign_drafts_page(
         request,
         session,
     )
+
+    if step_filter:
+        draft_rows = [
+            row for row in draft_rows
+            if str(row.cadence_step_id) == str(step_filter)
+        ]
 
     organization = (
         session.get(Organization, campaign.organization_id)
@@ -1696,11 +1703,102 @@ def campaign_drafts_page(
             "steps": steps,
             "drafts": draft_rows,
             "stats": stats,
+            "step_filter": step_filter,
             "active_page": "drafts",
             "current_user": current_user_email(request),
             "is_admin": is_admin(request),
         },
     )
+
+@app.post("/dashboard/campaigns/{campaign_id}/steps/{step_id}/delete")
+def delete_campaign_step(
+    campaign_id: int,
+    step_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+    step = session.get(CadenceStep, step_id)
+
+    if not step or step.campaign_id != campaign.id:
+        raise HTTPException(status_code=404, detail="Email step not found.")
+
+    related_drafts = session.exec(
+        select(EmailDraft).where(
+            EmailDraft.campaign_id == campaign.id,
+            EmailDraft.cadence_step_id == step.id,
+        )
+    ).all()
+
+    sent_drafts = [draft for draft in related_drafts if draft.sent]
+
+    if sent_drafts:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign.id}/steps",
+            "This email step cannot be deleted because it has sent drafts."
+        )
+
+    for draft in related_drafts:
+        session.delete(draft)
+
+    session.delete(step)
+    session.commit()
+
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign.id}/steps",
+        "Email step deleted."
+    )
+
+@app.post("/dashboard/campaigns/{campaign_id}/contacts/delete-all")
+def delete_all_campaign_contacts(
+    campaign_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+
+    sent_drafts = session.exec(
+        select(EmailDraft).where(
+            EmailDraft.campaign_id == campaign.id,
+            EmailDraft.sent == True,
+        )
+    ).all()
+
+    if sent_drafts:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign.id}/contacts",
+            "Contacts cannot be deleted because this campaign has sent drafts."
+        )
+
+    drafts = session.exec(
+        select(EmailDraft).where(
+            EmailDraft.campaign_id == campaign.id,
+        )
+    ).all()
+
+    for draft in drafts:
+        session.delete(draft)
+
+    contacts = session.exec(
+        select(Contact).where(
+            Contact.campaign_id == campaign.id,
+        )
+    ).all()
+
+    for contact in contacts:
+        session.delete(contact)
+
+    session.commit()
+
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign.id}/contacts",
+        "All campaign contacts and related unsent drafts were deleted."
+    )
+
 
 @app.post("/dashboard/campaigns/{campaign_id}/steps")
 def add_campaign_step(
@@ -2307,6 +2405,82 @@ def campaign_contacts_page(
             "is_admin": is_admin(request),
         },
     )
+def generate_email_draft(
+    contact: Contact,
+    campaign: Campaign,
+    step: CadenceStep,
+    session: Session,
+) -> dict:
+    organization = (
+        session.get(Organization, campaign.organization_id)
+        if campaign.organization_id
+        else None
+    )
+
+    style_examples = []
+
+    if organization:
+        saved_examples = session.exec(
+            select(StyleExample)
+            .where(StyleExample.organization_id == organization.id)
+            .order_by(StyleExample.created_at.desc())
+            .limit(5)
+        ).all()
+
+        style_examples = [
+            {
+                "subject": example.subject,
+                "body": example.body,
+                "label": example.label,
+            }
+            for example in saved_examples
+        ]
+
+    template_subject = step.template_subject or "Quick question for {{ company }}"
+    template_body = step.template_body or """Hi {{ first_name }},
+
+{{ intro_para }}
+
+{{ offer }}
+
+{{ call_to_action }}
+
+Best,
+{{ signature_name }}"""
+
+    draft_content = render_template_email(
+        template_subject=template_subject,
+        template_body=template_body,
+        first_name=contact.first_name or "",
+        company=contact.company or "",
+        industry=contact.industry or "",
+        role=contact.role or "",
+        website=contact.website or "",
+        email=contact.email or "",
+        offer=campaign.offer or "",
+        audience=campaign.audience or "small businesses",
+        tone=step.tone or "friendly, consultative, concise",
+        call_to_action=step.call_to_action or "Would you be open to a quick conversation?",
+        unsubscribe_url="",
+        cadence_step_name=step.name or "",
+        cadence_step_purpose=step.purpose or "",
+        step_number=step.step_number,
+        brand_voice=organization.brand_voice if organization else None,
+        avoid_phrases=organization.avoid_phrases if organization else None,
+        preferred_cta=organization.preferred_cta if organization else None,
+        signature_name=organization.signature_name if organization else None,
+        signature_title=organization.signature_title if organization else None,
+        signature_company=organization.signature_company if organization else None,
+        style_examples=style_examples,
+    )
+
+    subject = draft_content.get("subject") or template_subject
+    body = draft_content.get("body") or template_body
+
+    return {
+        "subject": subject,
+        "body": body,
+    }
 
 @app.post("/dashboard/campaigns/{campaign_id}/drafts/generate")
 def generate_campaign_drafts(
@@ -2321,135 +2495,127 @@ def generate_campaign_drafts(
 
     contacts = session.exec(
         select(Contact).where(
-            Contact.campaign_id == campaign_id,
-            Contact.unsubscribed == False,
-            Contact.suppressed == False,
+            Contact.campaign_id == campaign.id,
         )
     ).all()
 
-    if cadence_step_id == "all":
-        steps = session.exec(
-            select(CadenceStep).where(CadenceStep.campaign_id == campaign_id)
-        ).all()
-    else:
-        try:
-            selected_step_id = int(cadence_step_id)
-        except ValueError:
-            return redirect_with_message(
-                f"/dashboard/campaigns/{campaign_id}",
-                "Invalid email step selected.",
-            )
-
-        selected_step = session.get(CadenceStep, selected_step_id)
-
-        if not selected_step or selected_step.campaign_id != campaign_id:
-            return redirect_with_message(
-                f"/dashboard/campaigns/{campaign_id}",
-                "Selected email step not found for this campaign.",
-            )
-
-        require_step_access(selected_step, request, session)
-        steps = [selected_step]
-
-    steps = sorted(steps, key=lambda step: step.step_number)
-
     if not contacts:
         return redirect_with_message(
-            f"/dashboard/campaigns/{campaign_id}",
-            "No contacts found. Upload contacts to this campaign first.",
+            f"/dashboard/campaigns/{campaign.id}/drafts",
+            "No contacts found. Upload contacts before generating drafts."
         )
 
-    if not steps:
+    all_steps = session.exec(
+        select(CadenceStep)
+        .where(CadenceStep.campaign_id == campaign.id)
+        .order_by(CadenceStep.step_number)
+    ).all()
+
+    if not all_steps:
         return redirect_with_message(
-            f"/dashboard/campaigns/{campaign_id}",
-            "No email steps found. Add an email step first.",
+            f"/dashboard/campaigns/{campaign.id}/steps",
+            "No email steps found. Create an email step before generating drafts."
         )
 
-    organization = (
-        session.get(Organization, campaign.organization_id)
-        if campaign.organization_id
-        else None
-    )
+    if cadence_step_id == "all":
+        steps_to_generate = all_steps
+    else:
+        steps_to_generate = [
+            step for step in all_steps
+            if str(step.id) == str(cadence_step_id)
+        ]
 
-    style_examples = get_style_examples_for_organization(
-        campaign.organization_id,
-        session,
-        limit=5,
-    )
+    if not steps_to_generate:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign.id}/drafts",
+            "Selected email step was not found."
+        )
 
-    created = 0
-    skipped = 0
+    created_count = 0
+    skipped_existing = 0
+    skipped_blocked = 0
+    error_count = 0
+    errors = []
 
-    for contact in contacts:
-        for step in steps:
-            existing = session.exec(
+    for step in steps_to_generate:
+        for contact in contacts:
+            if contact.unsubscribed or contact.suppressed:
+                skipped_blocked += 1
+                continue
+
+            suppression = session.exec(
+                select(Suppression).where(
+                    Suppression.email == contact.email,
+                    Suppression.organization_id == contact.organization_id,
+                )
+            ).first()
+
+            if suppression:
+                skipped_blocked += 1
+                continue
+
+            existing_draft = session.exec(
                 select(EmailDraft).where(
+                    EmailDraft.campaign_id == campaign.id,
                     EmailDraft.contact_id == contact.id,
-                    EmailDraft.campaign_id == campaign_id,
                     EmailDraft.cadence_step_id == step.id,
                 )
             ).first()
 
-            if existing:
-                skipped += 1
+            if existing_draft:
+                skipped_existing += 1
                 continue
 
-            unsubscribe_url = build_unsubscribe_url(contact)
+            try:
+                draft_content = generate_email_draft(
+                    contact=contact,
+                    campaign=campaign,
+                    step=step,
+                    session=session,
+                )
 
-            ai_email = render_template_email(
-                template_subject=step.template_subject or "Quick question for {{ company }}",
-                template_body=step.template_body or "",
-                first_name=contact.first_name,
-                company=contact.company or "",
-                industry=contact.industry or "",
-                role=contact.role or "",
-                website=contact.website or "",
-                email=contact.email or "",
-                offer=campaign.offer,
-                audience=campaign.audience or "small businesses",
-                tone=step.tone or "friendly, consultative, concise",
-                call_to_action=step.call_to_action or "Would you be open to a quick conversation?",
-                unsubscribe_url=unsubscribe_url,
-                cadence_step_name=step.name,
-                cadence_step_purpose=step.purpose,
-                step_number=step.step_number,
-                brand_voice=organization.brand_voice if organization else None,
-                avoid_phrases=organization.avoid_phrases if organization else None,
-                preferred_cta=organization.preferred_cta if organization else None,
-                signature_name=organization.signature_name if organization else None,
-                signature_title=organization.signature_title if organization else None,
-                signature_company=organization.signature_company if organization else None,
-                style_examples=style_examples,
-            )
+                subject = draft_content.get("subject") or step.template_subject or f"Quick question for {contact.company or 'your team'}"
+                body = draft_content.get("body") or step.template_body or ""
 
-            unsubscribe_line = f"\n\nIf this is not relevant, you can stop future emails here: {unsubscribe_url}"
+                draft = EmailDraft(
+                    organization_id=campaign.organization_id,
+                    contact_id=contact.id,
+                    campaign_id=campaign.id,
+                    cadence_step_id=step.id,
+                    step_number=step.step_number,
+                    send_day=step.send_day,
+                    subject=subject,
+                    body=body,
+                    approved=False,
+                    sent=False,
+                )
 
-            draft = EmailDraft(
-                organization_id=campaign.organization_id,
-                contact_id=contact.id,
-                campaign_id=campaign_id,
-                cadence_step_id=step.id,
-                step_number=step.step_number,
-                send_day=step.send_day,
-                subject=ai_email["subject"],
-                body=ai_email["body"] + unsubscribe_line,
-                approved=False,
-                sent=False,
-            )
+                session.add(draft)
+                created_count += 1
 
-            session.add(draft)
-            created += 1
+            except Exception as e:
+                error_count += 1
+                error_message = f"Contact {contact.email}, step {step.step_number}: {repr(e)}"
+                errors.append(error_message)
+                print(f"DRAFT GENERATION ERROR: {error_message}")
 
     session.commit()
 
-    selected_label = "all email steps" if cadence_step_id == "all" else "selected email step only"
-
-    return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
-        f"Created {created} drafts for {selected_label}. Skipped {skipped} existing drafts.",
+    message = (
+        f"Draft generation complete. "
+        f"Created: {created_count}. "
+        f"Skipped existing: {skipped_existing}. "
+        f"Skipped blocked: {skipped_blocked}. "
+        f"Errors: {error_count}."
     )
 
+    if errors:
+        message += " Check Render logs for details."
 
+    return redirect_with_message(
+        f"/dashboard/campaigns/{campaign.id}/drafts",
+        message,
+    )
 @app.post("/dashboard/campaigns/{campaign_id}/drafts/approve-all")
 def approve_all_campaign_drafts(
     campaign_id: int,
