@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{{ campaign.name }} Steps | AI Emailer</title>
+    <title>{{ campaign.name }} Email Steps | AI Emailer</title>
     <link rel="stylesheet" href="/static/campaign_workspace.css">
 </head>
 
@@ -11,6 +11,12 @@
             <h1>Email Steps</h1>
             <div class="small" style="color: #d1d5db;">
                 {{ campaign.name }}
+                {% if current_user %}
+                    | Logged in as: {{ current_user }}
+                {% endif %}
+                {% if is_admin %}
+                    | Admin
+                {% endif %}
             </div>
         </div>
 
@@ -36,7 +42,7 @@
         <div class="card">
             <h2>Add Email Step</h2>
 
-            <div class="field-helper">
+            <div class="section-note">
                 <strong>Available Template Fields</strong>
 
                 <p class="small">
@@ -48,6 +54,7 @@
                         <strong>Contact / Campaign Fields</strong>
                         <div class="small" style="margin-top: 8px;">
                             <code>{{ "{{ first_name }}" }}</code> — Contact first name<br>
+                            <code>{{ "{{ last_name }}" }}</code> — Contact last name<br>
                             <code>{{ "{{ company }}" }}</code> — Company name<br>
                             <code>{{ "{{ audience }}" }}</code> — Campaign audience<br>
                             <code>{{ "{{ offer }}" }}</code> — Campaign offer<br>
@@ -60,16 +67,16 @@
                         <div class="small" style="margin-top: 8px;">
                             <code>{{ "{{ intro_para }}" }}</code> — AI-generated personalized intro<br>
                             <code>{{ "{{ unsubscribe_url }}" }}</code> — Contact unsubscribe link<br>
-                            <code>{first name}</code> — Also supported<br>
-                            <code>{company}</code> — Also supported<br>
-                            <code>{intro para}</code> — Also supported
+                            <code>{{ "{{ signature_name }}" }}</code> — Signature name<br>
+                            <code>{{ "{{ signature_title }}" }}</code> — Signature title<br>
+                            <code>{{ "{{ signature_company }}" }}</code> — Signature company
                         </div>
                     </div>
                 </div>
             </div>
 
             <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/steps">
-                <div class="four-grid">
+                <div class="form-grid" style="margin-top: 16px;">
                     <div>
                         <label>Step Number</label>
                         <input type="number" name="step_number" value="1" min="1" required>
@@ -78,6 +85,9 @@
                     <div>
                         <label>Send Day</label>
                         <input type="number" name="send_day" value="1" min="1" required>
+                        <div class="small">
+                            Day 1 is the first campaign send day.
+                        </div>
                     </div>
 
                     <div>
@@ -89,9 +99,7 @@
                         <label>Purpose</label>
                         <input type="text" name="purpose" value="Start a conversation" required>
                     </div>
-                </div>
 
-                <div class="form-grid" style="margin-top: 16px;">
                     <div>
                         <label>Tone</label>
                         <input type="text" name="tone" value="friendly, consultative, concise">
@@ -114,10 +122,11 @@
                             This fills the <code>{{ "{{ offer }}" }}</code> field in your email template.
                         </div>
                     </div>
+                </div>
 
-                    <div style="grid-column: 1 / -1;">
-                        <label>Body Template</label>
-                        <textarea class="large-textarea" name="template_body">Hi {{ "{{ first_name }}" }},
+                <div style="margin-top: 16px;">
+                    <label>Body Template</label>
+                    <textarea name="template_body" style="min-height: 300px;">Hi {{ "{{ first_name }}" }},
 
 {{ "{{ intro_para }}" }}
 
@@ -128,20 +137,36 @@ For many manufacturers, the challenge is not whether they have a CRM. It is whet
 {{ "{{ call_to_action }}" }}
 
 Best,
-Evan Burns
-President & CEO
-Evolution CRM</textarea>
+{{ "{{ signature_name }}" }}</textarea>
+
+                    <div class="small">
+                        Supported fields:
+                        <code>{{ "{{ first_name }}" }}</code>,
+                        <code>{{ "{{ last_name }}" }}</code>,
+                        <code>{{ "{{ company }}" }}</code>,
+                        <code>{{ "{{ audience }}" }}</code>,
+                        <code>{{ "{{ offer }}" }}</code>,
+                        <code>{{ "{{ call_to_action }}" }}</code>,
+                        <code>{{ "{{ intro_para }}" }}</code>,
+                        <code>{{ "{{ unsubscribe_url }}" }}</code>,
+                        <code>{{ "{{ signature_name }}" }}</code>,
+                        <code>{{ "{{ signature_title }}" }}</code>,
+                        <code>{{ "{{ signature_company }}" }}</code>.
                     </div>
                 </div>
 
                 <p>
-                    <button type="submit">Add Email Step</button>
+                    <button class="green" type="submit">Add Email Step</button>
                 </p>
             </form>
         </div>
 
         <div class="card">
             <h2>Existing Email Steps</h2>
+
+            <p class="section-note">
+                Editing an email step only affects future generated drafts. If drafts already exist for a step, delete unsent drafts for that step and regenerate them after editing.
+            </p>
 
             {% if steps %}
                 <table>
@@ -151,9 +176,10 @@ Evolution CRM</textarea>
                             <th>Send Day</th>
                             <th>Name</th>
                             <th>Purpose</th>
+                            <th>Tone</th>
+                            <th>CTA</th>
                             <th>Subject</th>
-                            <th>Edit</th>
-                            <th>Delete</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
 
@@ -164,46 +190,22 @@ Evolution CRM</textarea>
                                 <td>Day {{ step.send_day }}</td>
                                 <td>{{ step.name }}</td>
                                 <td>{{ step.purpose }}</td>
+                                <td>{{ step.tone }}</td>
+                                <td>{{ step.call_to_action }}</td>
                                 <td>{{ step.template_subject }}</td>
 
-                                <td>
-                                    <details>
-                                        <summary>Edit</summary>
+                                <td class="actions">
+                                    <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/steps/{{ step.id }}/edit">
+                                        Edit
+                                    </a>
 
-                                        <form method="post" action="/dashboard/steps/{{ step.id }}/edit">
-                                            <label>Step Number</label>
-                                            <input type="number" name="step_number" value="{{ step.step_number }}" min="1" required>
+                                    <a class="button" href="/dashboard/campaigns/{{ campaign.id }}/drafts?step_filter={{ step.id }}">
+                                        View Drafts
+                                    </a>
 
-                                            <label>Send Day</label>
-                                            <input type="number" name="send_day" value="{{ step.send_day }}" min="1" required>
-
-                                            <label>Name</label>
-                                            <input type="text" name="name" value="{{ step.name }}" required>
-
-                                            <label>Purpose</label>
-                                            <input type="text" name="purpose" value="{{ step.purpose }}" required>
-
-                                            <label>Tone</label>
-                                            <input type="text" name="tone" value="{{ step.tone }}">
-
-                                            <label>Call to Action</label>
-                                            <input type="text" name="call_to_action" value="{{ step.call_to_action }}">
-
-                                            <label>Subject Template</label>
-                                            <input type="text" name="template_subject" value="{{ step.template_subject }}">
-
-                                            <label>Body Template</label>
-                                            <textarea class="large-textarea" name="template_body">{{ step.template_body }}</textarea>
-
-                                            <p>
-                                                <button type="submit">Save Step</button>
-                                            </p>
-                                        </form>
-                                    </details>
-                                </td>
-
-                                <td>
-                                    <form method="post" action="/dashboard/steps/{{ step.id }}/delete" onsubmit="return confirm('Delete this email step? This only works if no drafts exist for it.');">
+                                    <form method="post"
+                                          action="/dashboard/campaigns/{{ campaign.id }}/steps/{{ step.id }}/delete"
+                                          onsubmit="return confirm('Delete this email step and all related unsent drafts? Sent drafts will block deletion.');">
                                         <button class="red" type="submit">Delete</button>
                                     </form>
                                 </td>
@@ -213,6 +215,10 @@ Evolution CRM</textarea>
                 </table>
             {% else %}
                 <p>No email steps yet.</p>
+
+                <div class="section-note">
+                    Add your first email step above, then go to Drafts to generate messages.
+                </div>
             {% endif %}
         </div>
 
