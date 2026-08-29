@@ -65,7 +65,7 @@
             </div>
 
             <p class="section-note" style="margin-top: 16px;">
-                Drafts are generated from your Email Steps. Existing drafts are skipped. If you edit an email step, delete unsent drafts for that step and regenerate.
+                Drafts are generated from your Email Steps. If you edit an email step, delete unsent drafts for that step and regenerate them.
             </p>
         </div>
 
@@ -73,7 +73,7 @@
             <h2>Generate Drafts</h2>
 
             <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/drafts/generate">
-                <div class="three-grid">
+                <div class="form-grid">
                     <div>
                         <label>Email Step</label>
                         <select name="cadence_step_id">
@@ -84,6 +84,10 @@
                                 </option>
                             {% endfor %}
                         </select>
+
+                        <div class="small">
+                            Existing drafts for the same contact and email step will be skipped.
+                        </div>
                     </div>
                 </div>
 
@@ -92,20 +96,48 @@
                 </p>
             </form>
 
-            <p class="small">
-                Existing drafts are skipped. Delete unsent drafts below before regenerating if the template changed.
+            <p class="section-note">
+                Duplicate protection is based on campaign + contact + email step.
+                If Step 1 drafts already exist, generating all steps will skip Step 1 and only create missing drafts.
             </p>
+        </div>
 
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 22px 0;">
+        <div class="card">
+            <h2>Filter Drafts</h2>
 
-            <h3>Delete Drafts for an Email Step</h3>
+            <form method="get" action="/dashboard/campaigns/{{ campaign.id }}/drafts">
+                <div class="form-grid">
+                    <div>
+                        <label>Filter by Email Step</label>
+                        <select name="step_filter">
+                            <option value="">All steps</option>
+                            {% for step in steps %}
+                                <option value="{{ step.id }}" {% if step_filter == step.id|string %}selected{% endif %}>
+                                    Step {{ step.step_number }} - Day {{ step.send_day }} - {{ step.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <p>
+                    <button type="submit">Apply Filter</button>
+                    <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/drafts">Clear</a>
+                </p>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Delete Drafts for an Email Step</h2>
 
             <p class="small">
                 This deletes only unsent drafts for the selected email step. Sent drafts are protected.
             </p>
 
-            <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/drafts/delete-step" onsubmit="return confirm('Delete all unsent drafts for this email step? You can regenerate them afterward.');">
-                <div class="three-grid">
+            <form method="post"
+                  action="/dashboard/campaigns/{{ campaign.id }}/drafts/delete-step"
+                  onsubmit="return confirm('Delete all unsent drafts for this email step? You can regenerate them afterward.');">
+                <div class="form-grid">
                     <div>
                         <label>Email Step</label>
                         <select name="cadence_step_id" required>
@@ -162,12 +194,19 @@
 
             <p class="section-note">
                 Manual sending only sends approved, unsent drafts for the selected day.
-                Automated sending uses the campaign automation settings from the Overview page.
+                Automated sending uses the campaign automation settings from the Automation page.
             </p>
         </div>
 
         <div class="card">
             <h2>Drafts</h2>
+
+            {% if step_filter %}
+                <p class="section-note">
+                    Showing drafts for the selected email step.
+                    <a href="/dashboard/campaigns/{{ campaign.id }}/drafts">Clear filter</a>
+                </p>
+            {% endif %}
 
             {% if drafts %}
                 <table>
@@ -243,10 +282,10 @@
                     </tbody>
                 </table>
             {% else %}
-                <p>No drafts yet.</p>
+                <p>No drafts found.</p>
 
                 <div class="section-note">
-                    Add email steps first, upload contacts, then generate drafts.
+                    Add email steps, upload contacts, then generate drafts.
                 </div>
             {% endif %}
         </div>
