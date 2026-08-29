@@ -1247,6 +1247,7 @@ def build_campaign_context(
         draft_rows.append({
             "id": draft.id,
             "campaign_id": draft.campaign_id,
+            "cadence_step_id": draft.cadence_step_id,
             "step_name": step.name if step else "",
             "step_number": draft.step_number,
             "send_day": draft.send_day,
@@ -1603,7 +1604,7 @@ def edit_campaign(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/settings",
         "Campaign settings updated.",
     )
 
@@ -1626,7 +1627,7 @@ def update_workspace_style_profile(
 
     if not campaign.organization_id:
         return redirect_with_message(
-            f"/dashboard/campaigns/{campaign_id}",
+            f"/dashboard/campaigns/{campaign_id}/voice",
             "This campaign does not have a workspace.",
         )
 
@@ -1634,7 +1635,7 @@ def update_workspace_style_profile(
 
     if not organization:
         return redirect_with_message(
-            f"/dashboard/campaigns/{campaign_id}",
+            f"/dashboard/campaigns/{campaign_id}/voice",
             "Workspace not found.",
         )
 
@@ -1649,7 +1650,7 @@ def update_workspace_style_profile(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/voice",
         "Workspace voice profile saved. Future generated drafts will use this voice.",
     )
 
@@ -1672,7 +1673,7 @@ def campaign_drafts_page(
     if step_filter:
         draft_rows = [
             row for row in draft_rows
-            if str(row.cadence_step_id) == str(step_filter)
+            if str(row.get("cadence_step_id")) == str(step_filter)
         ]
 
     organization = (
@@ -1879,7 +1880,7 @@ def edit_campaign_step(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{step.campaign_id}",
+        f"/dashboard/campaigns/{step.campaign_id}/steps",
         "Email step updated. Existing drafts are not changed automatically.",
     )
 
@@ -1907,7 +1908,7 @@ def delete_campaign_step(
 
     if existing_drafts:
         return redirect_with_message(
-            f"/dashboard/campaigns/{campaign_id}",
+            f"/dashboard/campaigns/{campaign_id}/steps",
             "Cannot delete this step because drafts already exist for it. Delete the unsent drafts for this step first.",
         )
 
@@ -1915,7 +1916,7 @@ def delete_campaign_step(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/steps",
         "Email step deleted.",
     )
 
@@ -1985,7 +1986,7 @@ async def upload_campaign_contacts(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/contacts",
         f"Imported {imported} contacts into {campaign.name}. Skipped {skipped}.",
     )
 
@@ -2031,7 +2032,7 @@ def dashboard_unsubscribe_contact(
     safe_update_hubspot_dnc(contact.email)
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/contacts",
         "Contact unsubscribed, suppressed, and HubSpot DNC update attempted.",
     )
 
@@ -2067,7 +2068,7 @@ def delete_contact(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/contacts",
         f"Deleted contact {contact_email} and {draft_count} related drafts.",
     )
 
@@ -2087,7 +2088,7 @@ def import_hubspot_to_campaign(
         hubspot_data = get_hubspot_contacts(limit=limit)
     except Exception as e:
         return redirect_with_message(
-            f"/dashboard/campaigns/{campaign_id}",
+            f"/dashboard/campaigns/{campaign_id}/contacts",
             f"HubSpot import failed: {repr(e)}",
         )
 
@@ -2132,7 +2133,7 @@ def import_hubspot_to_campaign(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/contacts",
         f"Imported {imported} HubSpot contacts into {campaign.name}. Skipped {skipped}.",
     )
 
@@ -2191,7 +2192,7 @@ def export_campaign_to_hubspot(
             print(f"HubSpot export exception for {contact.email}: {repr(e)}")
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/contacts",
         f"HubSpot export complete. Created {created}, updated {updated}, skipped {skipped}, failed {failed}.",
     )
 
@@ -2215,7 +2216,7 @@ def delete_single_draft(
 
     if draft.sent:
         return redirect_with_message(
-            f"/dashboard/campaigns/{campaign_id}",
+            f"/dashboard/campaigns/{campaign_id}/drafts",
             "Sent drafts cannot be deleted because they are part of the send history.",
         )
 
@@ -2223,7 +2224,7 @@ def delete_single_draft(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/drafts",
         "Draft deleted. You can now regenerate it if needed.",
     )
 
@@ -2243,7 +2244,7 @@ def delete_unsent_drafts_for_step(
 
     if not step or step.campaign_id != campaign_id:
         return redirect_with_message(
-            f"/dashboard/campaigns/{campaign_id}",
+            f"/dashboard/campaigns/{campaign_id}/drafts",
             "Email step not found for this campaign.",
         )
 
@@ -2265,7 +2266,7 @@ def delete_unsent_drafts_for_step(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/drafts",
         f"Deleted {deleted_count} unsent drafts for Step {step.step_number} - {step.name}. You can now regenerate drafts for that step.",
     )
 
@@ -2288,7 +2289,7 @@ def save_draft_as_style_example(
 
     if not draft.organization_id:
         return redirect_with_message(
-            f"/dashboard/campaigns/{draft.campaign_id}",
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
             "Draft does not have a workspace, so it cannot be saved as a style example.",
         )
 
@@ -2301,7 +2302,7 @@ def save_draft_as_style_example(
 
     if existing:
         return redirect_with_message(
-            f"/dashboard/campaigns/{draft.campaign_id}",
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
             "This draft is already saved as a style example.",
         )
 
@@ -2318,7 +2319,7 @@ def save_draft_as_style_example(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{draft.campaign_id}",
+        f"/dashboard/campaigns/{draft.campaign_id}/drafts",
         "Draft saved as a style example. Future generated drafts can use this voice.",
     )
 
@@ -2349,7 +2350,7 @@ def delete_style_example(
 
     if campaign_id:
         return redirect_with_message(
-            f"/dashboard/campaigns/{campaign_id}",
+            f"/dashboard/campaigns/{campaign_id}/voice",
             "Style example deleted.",
         )
 
@@ -2643,7 +2644,7 @@ def approve_all_campaign_drafts(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/drafts",
         f"Approved {approved_count} drafts for {campaign.name}.",
     )
 
@@ -2677,7 +2678,7 @@ def approve_campaign_day(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/drafts",
         f"Approved {approved_count} drafts for Day {send_day}.",
     )
 
@@ -2706,7 +2707,7 @@ def approve_single_draft(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{draft.campaign_id}",
+        f"/dashboard/campaigns/{draft.campaign_id}/drafts",
         "Draft approved.",
     )
 
@@ -2868,7 +2869,7 @@ def dashboard_save_draft_edit(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{draft.campaign_id}",
+        f"/dashboard/campaigns/{draft.campaign_id}/drafts",
         "Draft saved. Re-approval required. Use 'Save as Style Example' if this draft reflects your preferred voice.",
     )
 
@@ -2951,13 +2952,13 @@ def send_single_draft(
             user_message = "Email could not be sent. Please contact the administrator."
 
         return redirect_with_message(
-            f"/dashboard/campaigns/{campaign_id}",
+            f"/dashboard/campaigns/{campaign_id}/drafts",
             user_message,
         )
 
     if DEMO_MODE:
         return redirect_with_message(
-            f"/dashboard/campaigns/{campaign_id}",
+            f"/dashboard/campaigns/{campaign_id}/drafts",
             f"Demo mode is on. Email was previewed from {sender_email} with Reply-To {reply_to_email}, but not sent.",
         )
 
@@ -2968,7 +2969,7 @@ def send_single_draft(
     session.commit()
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/drafts",
         f"Email sent from {sender_email}. Reply-To {reply_to_email}.",
     )
 
@@ -2989,7 +2990,7 @@ def send_campaign_day(
 
     if not sender_email:
         return redirect_with_message(
-            f"/dashboard/campaigns/{campaign_id}",
+            f"/dashboard/campaigns/{campaign_id}/drafts",
             "Missing sender email. Add sender_email to the workspace or set SES_FROM_EMAIL.",
         )
 
@@ -3085,7 +3086,7 @@ def send_campaign_day(
         message += f" Errors: {len(errors)}. {error_preview}"
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/drafts",
         message,
     )
 
@@ -3237,7 +3238,7 @@ def update_campaign_automation(
             ).date()
         except ValueError:
             return redirect_with_message(
-                f"/dashboard/campaigns/{campaign_id}",
+                f"/dashboard/campaigns/{campaign_id}/automation",
                 "Invalid automation start date. Please select a valid date.",
             )
     else:
@@ -3254,7 +3255,7 @@ def update_campaign_automation(
         date_message = " No start date selected, so contacts will use their own upload/start date."
 
     return redirect_with_message(
-        f"/dashboard/campaigns/{campaign_id}",
+        f"/dashboard/campaigns/{campaign_id}/automation",
         f"Automation {status}. Daily send limit set to {campaign.daily_send_limit}.{date_message}",
     )
 
