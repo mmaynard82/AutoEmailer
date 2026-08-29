@@ -116,6 +116,21 @@
             </p>
         </div>
 
+        <div class="card danger-zone">
+            <h2>Delete All Contacts</h2>
+
+            <p class="section-note">
+                This deletes all contacts in this campaign and their related unsent drafts.
+                It will not run if the campaign has sent drafts.
+            </p>
+
+            <form method="post"
+                  action="/dashboard/campaigns/{{ campaign.id }}/contacts/delete-all"
+                  onsubmit="return confirm('Delete all contacts in this campaign and all related unsent drafts? This cannot be undone.');">
+                <button class="red" type="submit">Delete All Contacts</button>
+            </form>
+        </div>
+
         <div class="card">
             <h2>Contacts</h2>
 
