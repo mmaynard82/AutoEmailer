@@ -53,23 +53,23 @@
                     <div>
                         <strong>Contact / Campaign Fields</strong>
                         <div class="small" style="margin-top: 8px;">
-                            <code>{{ "{{ first_name }}" }}</code> — Contact first name<br>
-                            <code>{{ "{{ last_name }}" }}</code> — Contact last name<br>
-                            <code>{{ "{{ company }}" }}</code> — Company name<br>
-                            <code>{{ "{{ audience }}" }}</code> — Campaign audience<br>
-                            <code>{{ "{{ offer }}" }}</code> — Campaign offer<br>
-                            <code>{{ "{{ call_to_action }}" }}</code> — Step call to action
+                            <code>{% raw %}{{ first_name }}{% endraw %}</code> — Contact first name<br>
+                            <code>{% raw %}{{ last_name }}{% endraw %}</code> — Contact last name<br>
+                            <code>{% raw %}{{ company }}{% endraw %}</code> — Company name<br>
+                            <code>{% raw %}{{ audience }}{% endraw %}</code> — Campaign audience<br>
+                            <code>{% raw %}{{ offer }}{% endraw %}</code> — Campaign offer<br>
+                            <code>{% raw %}{{ call_to_action }}{% endraw %}</code> — Step call to action
                         </div>
                     </div>
 
                     <div>
                         <strong>AI / System Fields</strong>
                         <div class="small" style="margin-top: 8px;">
-                            <code>{{ "{{ intro_para }}" }}</code> — AI-generated personalized intro<br>
-                            <code>{{ "{{ unsubscribe_url }}" }}</code> — Contact unsubscribe link<br>
-                            <code>{{ "{{ signature_name }}" }}</code> — Signature name<br>
-                            <code>{{ "{{ signature_title }}" }}</code> — Signature title<br>
-                            <code>{{ "{{ signature_company }}" }}</code> — Signature company
+                            <code>{% raw %}{{ intro_para }}{% endraw %}</code> — AI-generated personalized intro<br>
+                            <code>{% raw %}{{ unsubscribe_url }}{% endraw %}</code> — Contact unsubscribe link<br>
+                            <code>{% raw %}{{ signature_name }}{% endraw %}</code> — Signature name<br>
+                            <code>{% raw %}{{ signature_title }}{% endraw %}</code> — Signature title<br>
+                            <code>{% raw %}{{ signature_company }}{% endraw %}</code> — Signature company
                         </div>
                     </div>
                 </div>
@@ -107,51 +107,51 @@
 
                     <div>
                         <label>Call to Action</label>
-                        <input type="text" name="call_to_action" value="Would you be open to a brief conversation to see if this would be useful for {{ "{{ company }}" }}, or be able to point me to the right person to speak with?">
+                        <input type="text" name="call_to_action" value="{% raw %}Would you be open to a brief conversation to see if this would be useful for {{ company }}, or be able to point me to the right person to speak with?{% endraw %}">
                     </div>
 
                     <div>
                         <label>Subject Template</label>
-                        <input type="text" name="template_subject" value="Quick question for {{ "{{ company }}" }}">
+                        <input type="text" name="template_subject" value="{% raw %}Quick question for {{ company }}{% endraw %}">
                     </div>
 
                     <div>
                         <label>Campaign Offer</label>
                         <textarea name="offer" placeholder="Example: We are currently offering a limited number of free CRM assessments to help manufacturers identify what is working, what is not, and what could be improved quickly.">{{ campaign.offer }}</textarea>
                         <div class="small">
-                            This fills the <code>{{ "{{ offer }}" }}</code> field in your email template.
+                            This fills the <code>{% raw %}{{ offer }}{% endraw %}</code> field in your email template.
                         </div>
                     </div>
                 </div>
 
                 <div style="margin-top: 16px;">
                     <label>Body Template</label>
-                    <textarea name="template_body" style="min-height: 300px;">Hi {{ "{{ first_name }}" }},
+                    <textarea name="template_body" style="min-height: 300px;">{% raw %}Hi {{ first_name }},
 
-{{ "{{ intro_para }}" }}
+{{ intro_para }}
 
 For many manufacturers, the challenge is not whether they have a CRM. It is whether the system is clean, useful, and actually helping the team follow up, forecast, quote, and manage customer relationships.
 
-{{ "{{ offer }}" }}
+{{ offer }}
 
-{{ "{{ call_to_action }}" }}
+{{ call_to_action }}
 
 Best,
-{{ "{{ signature_name }}" }}</textarea>
+{{ signature_name }}{% endraw %}</textarea>
 
                     <div class="small">
                         Supported fields:
-                        <code>{{ "{{ first_name }}" }}</code>,
-                        <code>{{ "{{ last_name }}" }}</code>,
-                        <code>{{ "{{ company }}" }}</code>,
-                        <code>{{ "{{ audience }}" }}</code>,
-                        <code>{{ "{{ offer }}" }}</code>,
-                        <code>{{ "{{ call_to_action }}" }}</code>,
-                        <code>{{ "{{ intro_para }}" }}</code>,
-                        <code>{{ "{{ unsubscribe_url }}" }}</code>,
-                        <code>{{ "{{ signature_name }}" }}</code>,
-                        <code>{{ "{{ signature_title }}" }}</code>,
-                        <code>{{ "{{ signature_company }}" }}</code>.
+                        <code>{% raw %}{{ first_name }}{% endraw %}</code>,
+                        <code>{% raw %}{{ last_name }}{% endraw %}</code>,
+                        <code>{% raw %}{{ company }}{% endraw %}</code>,
+                        <code>{% raw %}{{ audience }}{% endraw %}</code>,
+                        <code>{% raw %}{{ offer }}{% endraw %}</code>,
+                        <code>{% raw %}{{ call_to_action }}{% endraw %}</code>,
+                        <code>{% raw %}{{ intro_para }}{% endraw %}</code>,
+                        <code>{% raw %}{{ unsubscribe_url }}{% endraw %}</code>,
+                        <code>{% raw %}{{ signature_name }}{% endraw %}</code>,
+                        <code>{% raw %}{{ signature_title }}{% endraw %}</code>,
+                        <code>{% raw %}{{ signature_company }}{% endraw %}</code>.
                     </div>
                 </div>
 
