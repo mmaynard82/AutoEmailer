@@ -330,6 +330,27 @@ def build_style_guidance(
     return "\n\n".join(parts).strip()
 
 
+
+def template_contains_any_field(template_subject: str, template_body: str, fields: list[str]) -> bool:
+    combined = f"{template_subject or ''}\n{template_body or ''}".lower()
+
+    for field in fields:
+        normalized = field.lower()
+        compact = normalized.replace("_", " ")
+
+        candidates = [
+            "{{ " + normalized + " }}",
+            "{{" + normalized + "}}",
+            "{" + compact + "}",
+        ]
+
+        for candidate in candidates:
+            if candidate in combined:
+                return True
+
+    return False
+
+
 def replace_template_fields(
     template_subject: str,
     template_body: str,
@@ -341,6 +362,9 @@ def replace_template_fields(
     intro_para: str,
     personal_line: str,
     unsubscribe_url: str,
+    signature_name: str = "",
+    signature_title: str = "",
+    signature_company: str = "",
 ) -> dict:
     replacements = {
         "{{ first_name }}": first_name or "there",
@@ -374,6 +398,18 @@ def replace_template_fields(
         "{{ unsubscribe_url }}": unsubscribe_url or "",
         "{unsubscribe url}": unsubscribe_url or "",
         "{{unsubscribe_url}}": unsubscribe_url or "",
+
+        "{{ signature_name }}": signature_name or "",
+        "{signature name}": signature_name or "",
+        "{{signature_name}}": signature_name or "",
+
+        "{{ signature_title }}": signature_title or "",
+        "{signature title}": signature_title or "",
+        "{{signature_title}}": signature_title or "",
+
+        "{{ signature_company }}": signature_company or "",
+        "{signature company}": signature_company or "",
+        "{{signature_company}}": signature_company or "",
     }
 
     subject = template_subject or "Quick question"
@@ -719,6 +755,16 @@ def render_template_email(
     signature_company: str | None = None,
     style_examples: list[dict] | None = None,
 ) -> dict:
+    """
+    Render a campaign email step using the template exactly.
+
+    Important behavior:
+    - The step's subject and body are preserved.
+    - The AI is used only to generate {{ intro_para }} / {{ personal_line }} when the template asks for it.
+    - This function does not polish or rewrite the full body.
+    - It does not add an offer, CTA, intro, or signature unless the template contains that placeholder.
+    """
+
     first_name = clean_text(first_name) or "there"
     company = clean_text(company)
     industry = clean_text(industry)
@@ -738,11 +784,21 @@ def render_template_email(
     )
 
     unsubscribe_url = clean_text(unsubscribe_url)
+    signature_name = clean_text(signature_name)
+    signature_title = clean_text(signature_title)
+    signature_company = clean_text(signature_company)
 
-    if not website:
-        website = infer_website_from_email(email)
+    template_subject = template_subject or "Quick question for {{ company }}"
+    template_body = template_body or ""
 
-    website_text, website_used = fetch_website_text(website)
+    needs_intro = template_contains_any_field(
+        template_subject=template_subject,
+        template_body=template_body,
+        fields=["intro_para", "personal_line"],
+    )
+
+    website_text = ""
+    website_used = ""
 
     fallback_intro = build_fallback_intro(
         company=company,
@@ -757,54 +813,56 @@ def render_template_email(
         email_domain=email_domain,
     )
 
+    client = None
+    intro_para = ""
+    personal_line = fallback_personal_line
+
     print("--- AI writer context ---")
     print(f"Company: {company}")
     print(f"Email: {email}")
     print(f"Email domain: {email_domain}")
-    print(f"Website input: {website}")
-    print(f"Website used: {website_used}")
-    print(f"Website text length: {len(website_text)}")
+    print(f"Template needs intro: {needs_intro}")
     print(f"Gemini API key present: {bool(GEMINI_API_KEY)}")
     print(f"Gemini model candidates: {GEMINI_MODEL_CANDIDATES}")
 
-    client = None
+    if needs_intro:
+        if not website:
+            website = infer_website_from_email(email)
 
-    if GEMINI_API_KEY:
-        try:
-            client = genai.Client(api_key=GEMINI_API_KEY)
-        except Exception as e:
-            print(f"Could not create Gemini client: {repr(e)}")
-            client = None
+        website_text, website_used = fetch_website_text(website)
+
+        print(f"Website input: {website}")
+        print(f"Website used: {website_used}")
+        print(f"Website text length: {len(website_text)}")
+
+        if GEMINI_API_KEY:
+            try:
+                client = genai.Client(api_key=GEMINI_API_KEY)
+            except Exception as e:
+                print(f"Could not create Gemini client: {repr(e)}")
+                client = None
+        else:
+            print("GEMINI_API_KEY missing. Using fallback intro rendering.")
+
+        intro_para = generate_personalized_intro(
+            client=client,
+            first_name=first_name,
+            company=company,
+            industry=industry,
+            role=role,
+            website=website,
+            website_used=website_used,
+            website_text=website_text,
+            email_domain=email_domain,
+            offer=offer,
+            audience=audience,
+            tone=tone,
+            fallback_intro=fallback_intro,
+            brand_voice=brand_voice,
+            avoid_phrases=avoid_phrases,
+        )
     else:
-        print("GEMINI_API_KEY missing. Using fallback template rendering.")
-
-    style_guidance = build_style_guidance(
-        brand_voice=brand_voice,
-        avoid_phrases=avoid_phrases,
-        preferred_cta=preferred_cta,
-        signature_name=signature_name,
-        signature_title=signature_title,
-        signature_company=signature_company,
-        style_examples=style_examples,
-    )
-
-    intro_para = generate_personalized_intro(
-        client=client,
-        first_name=first_name,
-        company=company,
-        industry=industry,
-        role=role,
-        website=website,
-        website_used=website_used,
-        website_text=website_text,
-        email_domain=email_domain,
-        offer=offer,
-        audience=audience,
-        tone=tone,
-        fallback_intro=fallback_intro,
-        brand_voice=brand_voice,
-        avoid_phrases=avoid_phrases,
-    )
+        print("Template does not contain intro_para or personal_line. Skipping Gemini intro generation and preserving body exactly.")
 
     rendered = replace_template_fields(
         template_subject=template_subject,
@@ -815,31 +873,15 @@ def render_template_email(
         audience=audience,
         call_to_action=call_to_action,
         intro_para=intro_para,
-        personal_line=fallback_personal_line,
+        personal_line=personal_line,
         unsubscribe_url=unsubscribe_url,
-    )
-
-    subject = rendered["subject"]
-    body = rendered["body"]
-
-    polished = polish_full_email(
-        client=client,
-        subject=subject,
-        body=body,
-        first_name=first_name,
-        company=company,
-        industry=industry,
-        role=role,
-        website_text=website_text,
-        email_domain=email_domain,
-        offer=offer,
-        audience=audience,
-        tone=tone,
-        call_to_action=call_to_action,
-        style_guidance=style_guidance,
+        signature_name=signature_name,
+        signature_title=signature_title,
+        signature_company=signature_company,
     )
 
     return {
-        "subject": polished["subject"].strip(),
-        "body": polished["body"].strip(),
+        "subject": rendered["subject"].strip(),
+        "body": rendered["body"].strip(),
     }
+
