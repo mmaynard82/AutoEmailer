@@ -6,6 +6,7 @@ import requests
 from datetime import datetime, timedelta
 from typing import List, Optional
 from urllib.parse import quote
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -2483,6 +2484,49 @@ Best,
         "body": body,
     }
 
+
+def generate_email_draft_from_payload(payload: dict) -> dict:
+    draft_content = render_template_email(
+        template_subject=payload["template_subject"],
+        template_body=payload["template_body"],
+        first_name=payload["first_name"],
+        company=payload["company"],
+        industry=payload["industry"],
+        role=payload["role"],
+        website=payload["website"],
+        email=payload["email"],
+        offer=payload["offer"],
+        audience=payload["audience"],
+        tone=payload["tone"],
+        call_to_action=payload["call_to_action"],
+        unsubscribe_url=payload["unsubscribe_url"],
+        cadence_step_name=payload["cadence_step_name"],
+        cadence_step_purpose=payload["cadence_step_purpose"],
+        step_number=payload["step_number"],
+        brand_voice=payload["brand_voice"],
+        avoid_phrases=payload["avoid_phrases"],
+        preferred_cta=payload["preferred_cta"],
+        signature_name=payload["signature_name"],
+        signature_title=payload["signature_title"],
+        signature_company=payload["signature_company"],
+        style_examples=payload["style_examples"],
+    )
+
+    subject = draft_content.get("subject") or payload["template_subject"]
+    body = draft_content.get("body") or payload["template_body"]
+
+    return {
+        "contact_id": payload["contact_id"],
+        "campaign_id": payload["campaign_id"],
+        "organization_id": payload["organization_id"],
+        "cadence_step_id": payload["cadence_step_id"],
+        "step_number": payload["step_number"],
+        "send_day": payload["send_day"],
+        "email": payload["email"],
+        "subject": subject,
+        "body": body,
+    }
+
 @app.post("/dashboard/campaigns/{campaign_id}/drafts/generate")
 def generate_campaign_drafts(
     campaign_id: int,
@@ -2493,6 +2537,12 @@ def generate_campaign_drafts(
     require_dashboard_login(request)
 
     campaign = get_campaign_or_404_for_user(campaign_id, request, session)
+
+    organization = (
+        session.get(Organization, campaign.organization_id)
+        if campaign.organization_id
+        else None
+    )
 
     contacts = session.exec(
         select(Contact).where(
@@ -2532,73 +2582,171 @@ def generate_campaign_drafts(
             "Selected email step was not found."
         )
 
-    created_count = 0
+    style_examples = get_style_examples_for_organization(
+        organization_id=campaign.organization_id,
+        session=session,
+        limit=5,
+    )
+
+    suppressed_records = session.exec(
+        select(Suppression).where(
+            Suppression.organization_id == campaign.organization_id,
+        )
+    ).all()
+
+    suppressed_emails = {
+        suppression.email.strip().lower()
+        for suppression in suppressed_records
+        if suppression.email
+    }
+
+    existing_drafts = session.exec(
+        select(EmailDraft).where(
+            EmailDraft.campaign_id == campaign.id,
+        )
+    ).all()
+
+    existing_pairs = {
+        (draft.contact_id, draft.cadence_step_id)
+        for draft in existing_drafts
+        if draft.contact_id and draft.cadence_step_id
+    }
+
+    generation_jobs = []
     skipped_existing = 0
     skipped_blocked = 0
-    error_count = 0
-    errors = []
 
     for step in steps_to_generate:
+        template_subject = step.template_subject or "Quick question for {{ company }}"
+        template_body = step.template_body or """Hi {{ first_name }}
+
+{{ intro_para }}
+
+{{ offer }}
+
+{{ call_to_action }}
+
+Best,
+{{ signature_name }}"""
+
         for contact in contacts:
+            contact_email = (contact.email or "").strip().lower()
+
             if contact.unsubscribed or contact.suppressed:
                 skipped_blocked += 1
                 continue
 
-            suppression = session.exec(
-                select(Suppression).where(
-                    Suppression.email == contact.email,
-                    Suppression.organization_id == contact.organization_id,
-                )
-            ).first()
-
-            if suppression:
+            if contact_email in suppressed_emails:
                 skipped_blocked += 1
                 continue
 
-            existing_draft = session.exec(
-                select(EmailDraft).where(
-                    EmailDraft.campaign_id == campaign.id,
-                    EmailDraft.contact_id == contact.id,
-                    EmailDraft.cadence_step_id == step.id,
-                )
-            ).first()
-
-            if existing_draft:
+            if (contact.id, step.id) in existing_pairs:
                 skipped_existing += 1
                 continue
 
+            generation_jobs.append({
+                "contact_id": contact.id,
+                "campaign_id": campaign.id,
+                "organization_id": campaign.organization_id,
+                "cadence_step_id": step.id,
+                "step_number": step.step_number,
+                "send_day": step.send_day,
+                "template_subject": template_subject,
+                "template_body": template_body,
+                "first_name": contact.first_name or "",
+                "last_name": contact.last_name or "",
+                "company": contact.company or "",
+                "industry": contact.industry or "",
+                "role": contact.role or "",
+                "website": contact.website or "",
+                "email": contact.email or "",
+                "offer": campaign.offer or "",
+                "audience": campaign.audience or "small businesses",
+                "tone": step.tone or "friendly, consultative, concise",
+                "call_to_action": step.call_to_action or "Would you be open to a quick conversation?",
+                "unsubscribe_url": build_unsubscribe_url(contact) if contact.id else "",
+                "cadence_step_name": step.name or "",
+                "cadence_step_purpose": step.purpose or "",
+                "brand_voice": organization.brand_voice if organization else None,
+                "avoid_phrases": organization.avoid_phrases if organization else None,
+                "preferred_cta": organization.preferred_cta if organization else None,
+                "signature_name": organization.signature_name if organization else None,
+                "signature_title": organization.signature_title if organization else None,
+                "signature_company": organization.signature_company if organization else None,
+                "style_examples": style_examples,
+            })
+
+    if not generation_jobs:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{campaign.id}/drafts",
+            (
+                "No new drafts needed. "
+                f"Skipped existing: {skipped_existing}. "
+                f"Skipped blocked: {skipped_blocked}."
+            ),
+        )
+
+    created_count = 0
+    error_count = 0
+    errors = []
+    generated_results = []
+
+    max_workers = min(8, max(1, len(generation_jobs)))
+
+    print(
+        f"Starting multithreaded draft generation: "
+        f"{len(generation_jobs)} jobs, {max_workers} workers."
+    )
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_job = {
+            executor.submit(generate_email_draft_from_payload, job): job
+            for job in generation_jobs
+        }
+
+        for future in as_completed(future_to_job):
+            job = future_to_job[future]
+
             try:
-                draft_content = generate_email_draft(
-                    contact=contact,
-                    campaign=campaign,
-                    step=step,
-                    session=session,
-                )
-
-                subject = draft_content.get("subject") or step.template_subject or f"Quick question for {contact.company or 'your team'}"
-                body = draft_content.get("body") or step.template_body or ""
-
-                draft = EmailDraft(
-                    organization_id=campaign.organization_id,
-                    contact_id=contact.id,
-                    campaign_id=campaign.id,
-                    cadence_step_id=step.id,
-                    step_number=step.step_number,
-                    send_day=step.send_day,
-                    subject=subject,
-                    body=body,
-                    approved=False,
-                    sent=False,
-                )
-
-                session.add(draft)
-                created_count += 1
+                generated_results.append(future.result())
 
             except Exception as e:
                 error_count += 1
-                error_message = f"Contact {contact.email}, step {step.step_number}: {repr(e)}"
+                error_message = (
+                    f"Contact {job.get('email')}, "
+                    f"step {job.get('step_number')}: {repr(e)}"
+                )
                 errors.append(error_message)
                 print(f"DRAFT GENERATION ERROR: {error_message}")
+
+    for result in generated_results:
+        existing_check = session.exec(
+            select(EmailDraft).where(
+                EmailDraft.campaign_id == campaign.id,
+                EmailDraft.contact_id == result["contact_id"],
+                EmailDraft.cadence_step_id == result["cadence_step_id"],
+            )
+        ).first()
+
+        if existing_check:
+            skipped_existing += 1
+            continue
+
+        draft = EmailDraft(
+            organization_id=result["organization_id"],
+            contact_id=result["contact_id"],
+            campaign_id=result["campaign_id"],
+            cadence_step_id=result["cadence_step_id"],
+            step_number=result["step_number"],
+            send_day=result["send_day"],
+            subject=result["subject"],
+            body=result["body"],
+            approved=False,
+            sent=False,
+        )
+
+        session.add(draft)
+        created_count += 1
 
     session.commit()
 
