@@ -3211,6 +3211,86 @@ def send_single_draft(
         f"Email sent from {sender_email}. Reply-To {reply_to_email}.",
     )
 
+@app.post("/dashboard/drafts/{draft_id}/send-test")
+def send_test_draft_email(
+    draft_id: int,
+    request: Request,
+    test_email: str = Form(...),
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    draft = session.get(EmailDraft, draft_id)
+
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found.")
+
+    require_draft_access(draft, request, session)
+
+    campaign = session.get(Campaign, draft.campaign_id)
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found.")
+
+    test_email_clean = test_email.strip().lower()
+
+    if not test_email_clean or "@" not in test_email_clean:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
+            "Enter a valid test recipient email address.",
+        )
+
+    sender_email = get_sender_email_for_organization(
+        draft.organization_id,
+        session,
+    )
+
+    if not sender_email:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
+            "Missing sender email. Add sender_email to the workspace or set SES_FROM_EMAIL.",
+        )
+
+    reply_to_email = get_reply_to_email_for_sender(sender_email)
+
+    test_subject = f"TEST: {draft.subject}"
+
+    test_body = f"""TEST EMAIL ONLY
+
+This is a test preview of a campaign draft.
+It was sent to {test_email_clean}.
+It has not been marked as sent in the campaign.
+
+----------------------------
+
+{draft.body}
+"""
+
+    try:
+        safe_send_email(
+            to_email=test_email_clean,
+            subject=test_subject,
+            body=test_body,
+            from_email=sender_email,
+            reply_to_email=reply_to_email,
+            campaign_id=None,
+            contact_id=None,
+            draft_id=None,
+            organization_id=None,
+        )
+
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
+            f"Test email sent to {test_email_clean}. The draft was not marked as sent.",
+        )
+
+    except Exception as e:
+        print(f"TEST EMAIL SEND ERROR: Draft {draft.id}, {test_email_clean}: {repr(e)}")
+
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
+            "Test email failed. Check Render logs for details.",
+        )
 
 @app.post("/dashboard/campaigns/{campaign_id}/drafts/send-day")
 def send_campaign_day(

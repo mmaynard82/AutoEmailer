@@ -259,6 +259,17 @@
                                             <button type="submit">Regenerate</button>
                                         </form>
 
+                                        <form method="post"
+                                              action="/dashboard/drafts/{{ draft.id }}/send-test"
+                                              onsubmit="return confirm('Send this draft as a test email? This will not mark the draft as sent.');">
+                                            <input type="email"
+                                                   name="test_email"
+                                                   placeholder="test@example.com"
+                                                   required
+                                                   style="min-width: 190px;">
+                                            <button class="gray" type="submit">Send Test</button>
+                                        </form>
+
                                         <form method="post" action="/dashboard/drafts/{{ draft.id }}/save-style-example">
                                             <input type="hidden" name="label" value="Edited draft example">
                                             <button class="orange" type="submit">Save as Style Example</button>
