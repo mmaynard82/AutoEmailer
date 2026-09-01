@@ -253,6 +253,12 @@
                                     {% if not draft.sent %}
                                         <a class="button gray" href="/dashboard/drafts/{{ draft.id }}/edit">Edit</a>
 
+                                        <form method="post"
+                                              action="/dashboard/drafts/{{ draft.id }}/regenerate"
+                                              onsubmit="return confirm('Regenerate this draft using the current email step template? This will replace the current subject and body and require re-approval.');">
+                                            <button type="submit">Regenerate</button>
+                                        </form>
+
                                         <form method="post" action="/dashboard/drafts/{{ draft.id }}/save-style-example">
                                             <input type="hidden" name="label" value="Edited draft example">
                                             <button class="orange" type="submit">Save as Style Example</button>

@@ -3021,6 +3021,96 @@ def dashboard_save_draft_edit(
         "Draft saved. Re-approval required. Use 'Save as Style Example' if this draft reflects your preferred voice.",
     )
 
+@app.post("/dashboard/drafts/{draft_id}/regenerate")
+def regenerate_single_draft(
+    draft_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    require_dashboard_login(request)
+
+    draft = session.get(EmailDraft, draft_id)
+
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found.")
+
+    require_draft_access(draft, request, session)
+
+    if draft.sent:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
+            "Sent drafts cannot be regenerated because they are part of the send history.",
+        )
+
+    campaign = session.get(Campaign, draft.campaign_id)
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found.")
+
+    contact = session.get(Contact, draft.contact_id)
+
+    if not contact:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
+            "Contact not found for this draft.",
+        )
+
+    step = session.get(CadenceStep, draft.cadence_step_id)
+
+    if not step:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
+            "Email step not found for this draft.",
+        )
+
+    if contact.unsubscribed or contact.suppressed:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
+            "This contact is suppressed, so the draft was not regenerated.",
+        )
+
+    suppression = session.exec(
+        select(Suppression).where(
+            Suppression.email == contact.email,
+            Suppression.organization_id == contact.organization_id,
+        )
+    ).first()
+
+    if suppression:
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
+            "This contact is on the suppression list, so the draft was not regenerated.",
+        )
+
+    try:
+        draft_content = generate_email_draft(
+            contact=contact,
+            campaign=campaign,
+            step=step,
+            session=session,
+        )
+
+        draft.subject = draft_content.get("subject") or step.template_subject or draft.subject
+        draft.body = draft_content.get("body") or step.template_body or draft.body
+
+        # Regenerated drafts should be reviewed again.
+        draft.approved = False
+
+        session.add(draft)
+        session.commit()
+
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
+            "Draft regenerated. Please review and approve it before sending.",
+        )
+
+    except Exception as e:
+        print(f"SINGLE DRAFT REGENERATION ERROR: Draft {draft.id}: {repr(e)}")
+
+        return redirect_with_message(
+            f"/dashboard/campaigns/{draft.campaign_id}/drafts",
+            "Draft regeneration failed. Check Render logs for details.",
+        )
 
 @app.post("/dashboard/drafts/{draft_id}/send")
 def send_single_draft(
