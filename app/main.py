@@ -3532,6 +3532,27 @@ def build_due_drafts_preview(
         "total_previewed": len(preview_rows),
     }
 
+def build_campaign_launch_checklist(
+    campaign: Campaign,
+    contacts: list,
+    steps: list,
+    drafts: list,
+    sender_email: str | None,
+) -> dict:
+    total_contacts = len(contacts)
+    active_contacts = len([
+        contact for contact in contacts
+        if not contact.suppressed and not contact.unsubscribed
+    ])
+
+    total_steps = len(steps)
+    total_drafts = len(drafts)
+
+    approved_drafts = len([
+        draft for draft in drafts
+        if draft.get("approved") if isinstance(draft, dict) else False
+    ])
+
 @app.post("/dashboard/campaigns/{campaign_id}/automation")
 def update_campaign_automation(
     campaign_id: int,
@@ -3734,7 +3755,13 @@ def campaign_automation_page(
         session=session,
         limit=50,
     )
-
+    launch_checklist = build_campaign_launch_checklist(
+        campaign=campaign,
+        contacts=contacts,
+        steps=steps,
+        draft_rows=draft_rows,
+        sender_email=sender_email,
+    )
     return templates.TemplateResponse(
         request=request,
         name="campaign_automation.html",
@@ -3748,6 +3775,7 @@ def campaign_automation_page(
             "contacts": contacts,
             "steps": steps,
             "drafts": draft_rows,
+            "launch_checklist": launch_checklist,
             "stats": stats,
             "automation_logs": automation_logs,
             "due_drafts_preview": due_drafts_preview,

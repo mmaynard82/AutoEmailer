@@ -40,22 +40,100 @@
         {% endif %}
 
         <div class="card">
+            <h2>Campaign Launch Checklist</h2>
+
+            {% if launch_checklist.ready %}
+                <div class="message">
+                    <strong>Ready:</strong> {{ launch_checklist.summary }}
+                </div>
+            {% else %}
+                <div class="warning">
+                    <strong>Not Ready:</strong> {{ launch_checklist.summary }}
+                </div>
+            {% endif %}
+
+            <div class="stats-grid">
+                <div class="stat">
+                    <div class="number">{{ launch_checklist.complete_required }}</div>
+                    <div class="label">Complete</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ launch_checklist.total_required }}</div>
+                    <div class="label">Required Items</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">
+                        {% if launch_checklist.ready %}
+                            Yes
+                        {% else %}
+                            No
+                        {% endif %}
+                    </div>
+                    <div class="label">Ready to Launch</div>
+                </div>
+            </div>
+
+            <table style="margin-top: 18px;">
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Item</th>
+                        <th>Details</th>
+                        <th>Fix</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for item in launch_checklist.items %}
+                        <tr>
+                            <td>
+                                {% if item.complete %}
+                                    <span class="badge green">Complete</span>
+                                {% else %}
+                                    <span class="badge orange">Needs Attention</span>
+                                {% endif %}
+                            </td>
+
+                            <td>{{ item.label }}</td>
+                            <td>{{ item.detail }}</td>
+
+                            <td>
+                                {% if item.action_url %}
+                                    <a class="button gray" href="{{ item.action_url }}">Open</a>
+                                {% else %}
+                                    <span class="small">No action</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <p class="section-note" style="margin-top: 16px;">
+                The start date is shown as a reminder, but it does not block launch.
+                Required items include contacts, steps, drafts, approvals, sender email, demo mode, and daily send limit.
+            </p>
+        </div>
+
+        <div class="card">
             <h2>Automation Summary</h2>
 
             <div class="stats-grid">
                 <div class="stat">
                     <div class="number">
                         {% if campaign.automation_enabled %}
-                            <span class="status-on">On</span>
+                            On
                         {% else %}
-                            <span class="status-off">Off</span>
+                            Off
                         {% endif %}
                     </div>
-                    <div class="label">Automation Status</div>
+                    <div class="label">Automation</div>
                 </div>
 
                 <div class="stat">
-                    <div class="number">{{ campaign.daily_send_limit or 5 }}</div>
+                    <div class="number">{{ campaign.daily_send_limit }}</div>
                     <div class="label">Daily Send Limit</div>
                 </div>
 
@@ -64,27 +142,27 @@
                         {% if campaign.automation_start_date %}
                             {{ campaign.automation_start_date }}
                         {% else %}
-                            Contact Date
+                            Not Set
                         {% endif %}
                     </div>
-                    <div class="label">Day 1 Source</div>
+                    <div class="label">Start Date</div>
                 </div>
 
                 <div class="stat">
                     <div class="number">
                         {% if campaign.last_automation_run_at %}
-                            Ran
+                            {{ campaign.last_automation_run_at }}
                         {% else %}
-                            Not Yet
+                            Never
                         {% endif %}
                     </div>
-                    <div class="label">Last Automation Run</div>
+                    <div class="label">Last Run</div>
                 </div>
             </div>
 
             <p class="section-note" style="margin-top: 16px;">
-                Automation sends approved, unsent drafts when the campaign step is due.
-                Drafts must be generated and approved before automation can send them.
+                Automation sends approved, unsent drafts when their send day is due.
+                It will not send unapproved drafts, suppressed contacts, unsubscribed contacts, or sent drafts.
             </p>
         </div>
 
@@ -94,43 +172,38 @@
             <form method="post" action="/dashboard/campaigns/{{ campaign.id }}/automation">
                 <div class="form-grid">
                     <div>
-                        <label>Automation</label>
+                        <label>Automation Status</label>
                         <select name="automation_enabled">
-                            <option value="">Off</option>
+                            <option value="false" {% if not campaign.automation_enabled %}selected{% endif %}>Off</option>
                             <option value="true" {% if campaign.automation_enabled %}selected{% endif %}>On</option>
                         </select>
 
                         <div class="small">
-                            When turned on, the daily cron job can send approved drafts that are due.
-                        </div>
-                    </div>
-
-                    <div>
-                        <label>Automation Start Date</label>
-                        <input type="date" name="automation_start_date" value="{% if campaign.automation_start_date %}{{ campaign.automation_start_date }}{% endif %}">
-
-                        <div class="small">
-                            This is the Day 1 date for the whole campaign. Leave blank to use each contact's upload/start date.
+                            Turn on only after drafts are reviewed and approved.
                         </div>
                     </div>
 
                     <div>
                         <label>Daily Send Limit</label>
-                        <input type="number" name="daily_send_limit" value="{{ campaign.daily_send_limit or 5 }}" min="1" max="100">
+                        <input type="number"
+                               name="daily_send_limit"
+                               value="{{ campaign.daily_send_limit or 5 }}"
+                               min="1"
+                               max="100">
 
                         <div class="small">
-                            Recommended while warming up: 3 to 5 per day.
+                            Keep this low while warming up a sending domain.
                         </div>
                     </div>
 
                     <div>
-                        <label>Last Automation Run</label>
-                        <div class="section-note">
-                            {% if campaign.last_automation_run_at %}
-                                {{ campaign.last_automation_run_at }}
-                            {% else %}
-                                Not run yet
-                            {% endif %}
+                        <label>Automation Start Date</label>
+                        <input type="date"
+                               name="automation_start_date"
+                               value="{{ campaign.automation_start_date or '' }}">
+
+                        <div class="small">
+                            Day 1 drafts send on this date. Day 3 drafts send two days later. If blank, the app may use contact upload dates.
                         </div>
                     </div>
                 </div>
@@ -144,15 +217,25 @@
         <div class="card">
             <h2>Due Drafts Preview</h2>
 
-            <p class="section-note">
-                Due now: {{ due_drafts_preview.due_count }} |
-                Blocked or not due: {{ due_drafts_preview.blocked_count }} |
-                Previewed: {{ due_drafts_preview.total_previewed }}
-            </p>
+            <div class="stats-grid">
+                <div class="stat">
+                    <div class="number">{{ due_drafts_preview.due_count }}</div>
+                    <div class="label">Due Now</div>
+                </div>
 
-            <p class="small">
-                This preview shows approved, unsent drafts and whether automation would send them now.
-                The cron job will still respect the daily send limit.
+                <div class="stat">
+                    <div class="number">{{ due_drafts_preview.blocked_count }}</div>
+                    <div class="label">Blocked</div>
+                </div>
+
+                <div class="stat">
+                    <div class="number">{{ due_drafts_preview.total_previewed }}</div>
+                    <div class="label">Previewed</div>
+                </div>
+            </div>
+
+            <p class="section-note" style="margin-top: 16px;">
+                This preview shows drafts that are due based on the automation start date, send day, approval status, and contact status.
             </p>
 
             {% if due_drafts_preview.rows %}
@@ -175,14 +258,15 @@
                             <tr>
                                 <td>
                                     {% if row.can_send %}
-                                        <span class="badge green">Due now</span>
+                                        <span class="badge green">Can Send</span>
                                     {% else %}
-                                        <span class="badge gray">Not sendable</span>
+                                        <span class="badge orange">Blocked</span>
                                     {% endif %}
                                 </td>
+
                                 <td>{{ row.reason }}</td>
                                 <td>{{ row.step_number }}</td>
-                                <td>{{ row.send_day }}</td>
+                                <td>Day {{ row.send_day }}</td>
                                 <td>{{ row.contact_name }}</td>
                                 <td>{{ row.email }}</td>
                                 <td>{{ row.company }}</td>
@@ -192,10 +276,10 @@
                     </tbody>
                 </table>
             {% else %}
-                <p>No approved, unsent drafts to preview.</p>
+                <p>No due drafts to preview yet.</p>
 
                 <div class="section-note">
-                    Generate and approve drafts before automation can send anything.
+                    Generate drafts, approve them, and set an automation start date to see due drafts here.
                 </div>
             {% endif %}
         </div>
@@ -203,15 +287,11 @@
         <div class="card">
             <h2>Automation Log</h2>
 
-            <p class="small">
-                This shows the most recent cron checks and automated sending activity for this campaign.
-            </p>
-
             {% if automation_logs %}
                 <table>
                     <thead>
                         <tr>
-                            <th>Time</th>
+                            <th>Date</th>
                             <th>Event</th>
                             <th>Message</th>
                             <th>Due</th>
@@ -247,7 +327,7 @@
                 <p>No automation log entries yet.</p>
 
                 <div class="section-note">
-                    The log will appear after the cron job runs or after automation activity is recorded.
+                    Once the Render cron job runs, automation activity will appear here.
                 </div>
             {% endif %}
         </div>
@@ -256,51 +336,48 @@
             <h2>Before Turning Automation On</h2>
 
             <div class="section-note">
-                Confirm these items before using automation:
+                Recommended order:
                 <br><br>
-
-                1. Contacts are uploaded or imported.
+                1. Upload contacts.
                 <br>
-                2. Email steps are created.
+                2. Add email steps.
                 <br>
-                3. Drafts are generated.
+                3. Generate drafts.
                 <br>
-                4. Drafts are reviewed and approved.
+                4. Review drafts.
                 <br>
-                5. Sender email is verified in SES.
+                5. Send a test email.
                 <br>
-                6. DEMO_MODE is false if you want real sending.
+                6. Approve drafts.
                 <br>
-                7. Render Cron Job is configured with the correct CRON_SECRET.
+                7. Set the automation start date.
+                <br>
+                8. Turn automation on.
             </div>
-
-            <p>
-                <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/contacts">Manage Contacts</a>
-                <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/steps">Manage Email Steps</a>
-                <a class="button gray" href="/dashboard/campaigns/{{ campaign.id }}/drafts">Manage Drafts</a>
-            </p>
         </div>
 
         <div class="card">
             <h2>How Send Days Work</h2>
 
-            <div class="section-note">
-                If you set an Automation Start Date, that date becomes <strong>Day 1</strong> for the campaign.
-                <br><br>
+            <p>
+                Send Day controls when each email step should send.
+            </p>
 
+            <div class="section-note">
                 Example:
-                <br>
+                <br><br>
                 Automation Start Date: September 1
                 <br>
-                Step Day 1 sends on September 1.
+                Step 1, Send Day 1 → sends September 1
                 <br>
-                Step Day 3 sends on September 3.
+                Step 2, Send Day 3 → sends September 3
                 <br>
-                Step Day 7 sends on September 7.
-                <br><br>
-
-                If you leave Automation Start Date blank, each contact uses their own sequence start date, usually the upload/import date.
+                Step 3, Send Day 7 → sends September 7
             </div>
+
+            <p class="small">
+                If the cron job misses a day, the app will catch up on due approved drafts the next time it runs, while still respecting the daily send limit.
+            </p>
         </div>
 
     </main>
